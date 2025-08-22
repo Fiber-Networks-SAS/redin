@@ -1,0 +1,37 @@
+#ewriteCond %{HTTPS} off
+#RewriteCond %{REQUEST_URI} !^/[0-9]+..+.cpaneldcv$
+#RewriteCond %{REQUEST_URI} !^/[A-F0-9]{32}.txt(?:\ Comodo\ DCV)?$
+#RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+
+#added by CAB for access whitout /public redirection
+<IfModule mod_rewrite.c>
+	RewriteEngine on
+	RewriteCond %{REQUEST_URI} !^public
+	RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+
+# Instruct the browser to always check for the latest version of pdf
+<IfModule mod_headers.c>
+	<FilesMatch "(?i)^.*\.(pdf)$">
+		Header set Cache-Control "max-age=0,must-revalidate"
+	</FilesMatch>
+</IfModule>
+
+# BEGIN cPanel-generated php ini directives, do not edit
+# Manual editing of this file may result in unexpected behavior.
+# To make changes to this file, use the cPanel MultiPHP INI Editor (Home >> Software >> MultiPHP INI Editor)
+# For more information, read our documentation (https://go.cpanel.net/EA4ModifyINI)
+<IfModule php7_module>
+   php_value upload_max_filesize 200M
+   php_value post_max_size 200M
+   php_flag display_errors Off
+   php_value max_execution_time 200000
+   php_value max_input_time 200000
+   php_value max_input_vars 5000
+   php_value memory_limit 512M
+   php_value session.gc_maxlifetime 1440
+   php_value session.save_path "/var/cpanel/php/sessions/ea-php71"
+   php_flag zlib.output_compression Off
+</IfModule>
+# END cPanel-generated php ini directives, do not edit

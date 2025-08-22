@@ -1,0 +1,126 @@
+.dataTables_processing{
+	height: 45px;
+	border: 1px solid #cdcdcd;
+	color: #337ab7;
+    background-color: #ededed;
+}
+
+.table tbody img{
+    border-radius: 50%;
+    width: 29px;
+}
+
+th.dt-center, td.dt-center { 
+	text-align: center; 
+}
+th.dt-right, td.dt-right { 
+	text-align: right; 
+}
+
+.table .status-active{
+	color: #169F85;
+}
+.table .status-inactive{
+	color: #d9534f;
+}
+.rgb-color{
+	min-width: 120px;
+}
+.move-icon{
+	cursor: pointer;
+	width: 16px;
+	margin: 0 auto;
+
+}
+.alert-danger .alert-link {
+    color: #fff;
+}
+
+.input-group {
+    margin-bottom: 0;
+}
+
+.input-group-btn .btn{
+    margin-bottom: 0;
+    margin-right: 0;
+}
+
+.checkbox label, .radio label{
+	padding-left:0;
+	padding-right: 20px;
+}
+
+.table tbody img.pdf-icon{
+	border-radius:0!important;
+
+}
+
+.table thead,
+.table tfoot{
+	background-color: #ededed;
+}
+.reportContainer h2{
+	padding: 20px 0 0 0;
+}
+
+.reportContainer table thead tr th:last-child,
+.reportContainer table tbody tr td:last-child,
+.reportContainer table tfoot tr td:last-child{
+	text-align: right;
+}
+.loader{
+	text-align: center;
+}
+
+table tr th.right,
+table tr td.right{
+	text-align: right;
+}
+table tr th.center,
+table tr td.center{
+	text-align: center;
+}
+table tr td.subheader{
+	background-color: #e4e8ea;
+	text-align: left!important;
+}
+.tooltip-arrow{
+	border-bottom-color: #2a3f54!important;
+}
+
+.tooltip-inner{
+	max-width: 230px;
+    color: #fff;
+    text-align: center;
+    background-color: #2a3f54;
+}
+
+span.label{
+	color: #fff;
+}
+.message_wrapper blockquote.message{
+	font-size: 15px;
+}
+
+table .highlight{
+	font-weight: bold;
+}
+
+table.table-bordered.dataTable tbody th, 
+table.table-bordered.dataTable tbody td,
+.dtr-data{
+	white-space: inherit;
+}
+
+.factura_fila_importe,
+.factura_importe_bonificacion{
+	float: right;
+	clear: both;
+	text-align: right;
+	margin: 0;
+}
+
+.resumenTable tbody tr.debe,
+.resumenTable tbody tr.debe a{
+	color: red;
+}

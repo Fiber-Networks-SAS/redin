@@ -1,0 +1,53 @@
+.dataTables_processing{
+	height: 45px;
+	border: 1px solid #cdcdcd;
+	color: #337ab7;
+    background-color: #ededed;
+}
+
+.table tbody img{
+    border-radius: 50%;
+    width: 29px;
+}
+.table tbody img.preview{
+	border-radius: 10%;
+	width: 50px;
+}
+.table tbody i.preview{
+font-size: 25px;
+}
+
+th.dt-center, td.dt-center { 
+	text-align: center; 
+}
+th.dt-right, td.dt-right { 
+	text-align: right; 
+}
+
+.table .status-active{
+	color: #169F85;
+}
+.table .status-inactive{
+	color: #d9534f;
+}
+.rgb-color{
+	min-width: 120px;
+}
+.label-danger{
+	font-size: 100%!important;
+}
+span.label{
+	color: #fff;
+}
+.message_wrapper blockquote.message{
+	font-size: 15px;
+}
+table .highlight{
+	font-weight: bold;
+}
+.msg_list a{
+	color: #226ba1;
+}
+.x_title small{
+	color: #fff;
+}
