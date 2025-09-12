@@ -89,4 +89,17 @@ return [
     */
     'role_foreign_key' => 'role_id',
 
+    /*
+    |--------------------------------------------------------------------------
+    | Cache
+    |--------------------------------------------------------------------------
+    |
+    | Whether or not to cache the user roles and permissions
+    |
+    */
+    'cache' => [
+        'enabled' => false,
+        'cache_slug' => 'entrust',
+    ],
+
 ];
