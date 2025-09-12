@@ -37,7 +37,7 @@
   <body>
     <section class="wraper">
       <header class="header">
-        <h1>QUALITY TEL NETWORKS</h1>
+        <h1>ReDin</h1>
         <h2>Estamos renovando el sitio, muy pronto podrás acceder.</h2>
         <h3><i class="fa fa-check"></i> Si ya sos cliente podrás acceder al sistema de autogestión.</h3>
         <h3><i class="fa fa-check"></i> Si aún no sos cliente podrás conocer mejor nuestros servicios.</h3>
@@ -107,14 +107,14 @@
         <section class="social-links">
 
           <ul class="">
-            <li><i class="fa fa-map-marker"></i> San Martin 439 Piso 12 C - C.A.B.A. <i class="fa fa-phone"></i> +54 011 60913728 </li>
-            <li><i class="fa fa-globe"></i> <a href="http://www.qtnmisiones.com">www.qtnmisiones.com</a>&nbsp<i class="fa fa-envelope"></i> <a href="mailto:adm.qtn@gmail.com">adm.qtn@gmail.com</a></li>
+            <li><i class="fa fa-whatsapp"></i> +54 9 376 5525956 </li>
+            <li><i class="fa fa-globe"></i> <a href="http://www.redin.com.ar">www.redin.com.ar</a>&nbsp<i class="fa fa-envelope"></i> <a href="mailto:administracion@redin.com.ar">administracion@redin.com.ar</a></li>
           </ul>
 
         </section><!-- /.social-links -->
 
         <ul class="copyright">
-          <li>Quality Tel Networks - 2018</li>
+          <li>ReDin - 2025</li>
         </ul>
 
       </footer>

@@ -151,8 +151,8 @@ return [
          * Here you can specify how emails should be sent.
          */
         'mail' => [
-            'from' => 'adm.qtn@gmail.com',
-            'to' => 'adm.qtn@gmail.com',
+            'from' => 'administracion@gmail.com',
+            'to' => 'administracion@gmail.com',
         ],
 
         /*

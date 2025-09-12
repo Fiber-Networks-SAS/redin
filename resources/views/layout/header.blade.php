@@ -45,7 +45,7 @@
             <div class="col-md-3 left_col">
                     <div class="left_col scroll-view">
                         <div class="navbar nav_title">
-                            <a href="/dashboard" class="site_title"><img src="{{ config('constants.logo') }}" class="logo-dashboard" alt="{{ config('constants.title') }}">{{ config('constants.title') }}</a>
+                            <a href="/dashboard" class="site_title"><img src="{{ config('constants.logo') }}" class="logo-dashboard" alt="{{ config('constants.title') }}"></a>
                         </div>
 
                         <div class="clearfix"></div>

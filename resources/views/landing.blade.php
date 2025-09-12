@@ -41,7 +41,7 @@
         <div class="item active" style="background-image: url(/_landing/images/slider/1.jpg)">
           <div class="caption">
             <!-- <h1 class="animated fadeInLeftBig"><img src="images/logo2.png" alt=""> <span>Quality Tel Networks</span></h1> -->
-            <h1 class="">Quality Tel Networks</h1>
+            <h1 class="">ReDin</h1>
             <!-- <h1 class="animated fadeInLeftBig"> Quality Tel Networks</h1> -->
             <!-- <p class="animated fadeInRightBig">Quality Tel Networks</p> -->
             <p class="animated fadeInRightBig">Lider en Telecomunicaciones</p>
@@ -79,7 +79,7 @@
             <span class="icon-bar"></span>
           </button>
           <a class="navbar-brand" href="#home">
-            <h1><img class="img-responsive" src="{{ config('constants.logo') }}" alt="logo">QTN</h1>
+            <img class="img-responsive" src="{{ config('constants.logo') }}" alt="logo">
           </a>                    
         </div>
         <div class="collapse navbar-collapse">
@@ -324,11 +324,10 @@
                 <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation.</p>
                 <br>
                 <ul class="address">
-                  <li><i class="fa fa-map-marker"></i> San Martin 439 Piso 12 C - CABA  </li>
-                  <li><i class="fa fa-phone"></i> +54 011 60913728 </li>
+                  <li><i class="fa fa-whatsapp"></i> +54 9 376 5525956 </li>
                   <!-- <li><i class="fa fa-whatsapp"></i> +54 3765 125439 </li> -->
-                  <li><i class="fa fa-envelope"></i> <a href="mailto:adm.qtn@gmail.com">adm.qtn@gmail.com</a></li>
-                  <li><i class="fa fa-globe"></i> <a href="http://www.qtnmisiones.com">www.qtnmisiones.com</a></li>
+                  <li><i class="fa fa-envelope"></i> <a href="mailto:administracion@redin.com.ar">administracion@redin.com.ar</a></li>
+                  <li><i class="fa fa-globe"></i> <a href="http://www.redin.com.ar">www.redin.com.ar</a></li>
                 </ul>
               </div>                            
             </div>
@@ -346,7 +345,7 @@
         </div>
         <div class="social-icons">
           <ul>
-            <li><a class="envelope" href="mailto:adm.qtn@gmail.com"><i class="fa fa-envelope"></i></a></li>
+            <li><a class="envelope" href="mailto:administracion@redin.com.ar"><i class="fa fa-envelope"></i></a></li>
             <!-- <li><a class="twitter" href="#"><i class="fa fa-twitter"></i></a></li>  -->
             <li><a class="dribbble" href="#home"><i class="fa fa-dribbble"></i></a></li>
             <!-- <li><a class="facebook" href="#"><i class="fa fa-facebook"></i></a></li> -->

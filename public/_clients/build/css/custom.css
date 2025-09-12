@@ -4197,8 +4197,9 @@ ul.notifications {
   width: 200px;
  }
  .logo-dashboard{
-  width: 60px;
-
+  width: 100px;
+  display: block;
+  margin: 10px auto;
  }
 .login_wrapper .submit{
   background-color: #1072b7;

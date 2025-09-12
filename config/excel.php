@@ -58,15 +58,15 @@ return array(
     ),
 
     'properties' => array(
-        'creator'        => 'QTN Misiones',
-        'lastModifiedBy' => 'QTN Misiones',
+        'creator'        => 'ReDin',
+        'lastModifiedBy' => 'ReDin',
         'title'          => 'Spreadsheet',
         'description'    => 'Spreadsheet export',
         'subject'        => 'Spreadsheet export',
-        'keywords'       => 'excel, export, qtn',
+        'keywords'       => 'excel, export, redin',
         'category'       => 'Excel',
-        'manager'        => 'QTN Misiones',
-        'company'        => 'QTN Misiones',
+        'manager'        => 'ReDin',
+        'company'        => 'ReDin',
     ),
 
     /*
@@ -106,7 +106,7 @@ return array(
     |
     */
 
-    'creator'    => 'QTN Misiones',
+    'creator'    => 'ReDin',
 
     'csv'        => array(
         /*

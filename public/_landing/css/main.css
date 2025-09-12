@@ -81,13 +81,14 @@ h3 {
 }*/
 
 .navbar-brand img{
-    width: 60px;
-    background-color: #fff;
+    width: 170px;
     border-radius: 5px;
     margin: 0 7px 0 0;
     display: inline-block;
 }
-
+.navbar-brand {
+  padding: 10px 15px !important;
+}
 a {
   text-decoration: none;
   -webkit-transition: 300ms;

@@ -3,7 +3,7 @@
           <div class="pull-right">
             <!-- Gentelella - Bootstrap Admin Template by <a href="https://colorlib.com">Colorlib</a> -->
 
-            <a href="/dashboard" class="site_title"><img src="{{ config('constants.logo') }}" class="logo-dashboard" alt="{{ config('constants.title') }}">{{ config('constants.title') }}</a>
+            <a href="/dashboard" class="site_title"><img src="{{ config('constants.logo') }}" class="logo-dashboard" alt="{{ config('constants.title') }}"></a>
 
           </div>
           <div class="clearfix"></div>
