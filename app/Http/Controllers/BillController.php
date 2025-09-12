@@ -795,13 +795,17 @@ class BillController extends Controller
         // verifico que existan clientes activos
 
         // For work edit file : \vendor\zizaco\entrust\src\Entrust\Traits\EntrustRoleTrait.php #52
-        $users = Role::where('name', 'client')->first()->users()->get();
+        $clientRole = Role::where('name', 'client')->first();
         $clients = 0;
 
-        if (count($users)) {
-            foreach ($users as $user) {
-                if ($user->status == 1) {
-                    $clients++;
+        if ($clientRole) {
+            $users = $clientRole->users()->get();
+            
+            if (count($users)) {
+                foreach ($users as $user) {
+                    if ($user->status == 1) {
+                        $clients++;
+                    }
                 }
             }
         }
@@ -849,7 +853,8 @@ class BillController extends Controller
 
 
         // For work edit file : \vendor\zizaco\entrust\src\Entrust\Traits\EntrustRoleTrait.php #52
-        $users = Role::where('name', 'client')->first()->users()->get();
+        $clientRole = Role::where('name', 'client')->first();
+        $users = $clientRole ? $clientRole->users()->get() : collect([]);
         
         // Obtengo los servicios activos de los clientes activos
         if (count($users)) {
@@ -1408,7 +1413,7 @@ class BillController extends Controller
             
             // genero el path del pdf de la factura
             $factura->filename = $factura->talonario->nro_punto_vta.'-'.$factura->nro_factura;
-            $factura->filePath = config('constants.folder_facturas') . 'factura-'.$factura->filename.'.pdf';
+            $factura->filePath = public_path(config('constants.folder_facturas') . 'factura-'.$factura->filename.'.pdf');
 
             // datos del cliente
             $factura->cliente;
@@ -1868,7 +1873,7 @@ class BillController extends Controller
                 $filename = 'balance';
                 
                 $pdf = PDF::loadView('pdf.balance', ['response' => $response]);
-                $pdf->save(config('constants.folder_balance_pdf') . $filename . '.pdf');
+                $pdf->save(public_path(config('constants.folder_balance_pdf') . $filename . '.pdf'));
                 // return $pdf->stream(config('constants.folder_balance_pdf') . $filename . '.pdf');
 
                 return $filename;

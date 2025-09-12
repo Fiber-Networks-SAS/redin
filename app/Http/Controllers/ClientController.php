@@ -357,11 +357,13 @@ class ClientController extends Controller
         $currentDate = new DateTime();
         $errorMessage = '';
 
-        // only client
-        $user = User::whereHas('roles', function ($query) {
-                                $query->where('name', '=', 'client');
-                              })
+        // only client - avoid Laravel 5.3 compact() bug
+        $user = User::with('roles')
                         ->where('email', '=', $request->email)
+                        ->get()
+                        ->filter(function ($user) {
+                            return $user->roles->contains('name', 'client');
+                        })
                         ->first();
 
 
@@ -408,11 +410,13 @@ class ClientController extends Controller
 
             // $users = User::where('remember_token', $token)->first();
 
-            // only client
-            $user = User::whereHas('roles', function ($query) {
-                                    $query->where('name', '=', 'client');
-                                  })
+            // only client - avoid Laravel 5.3 compact() bug
+            $user = User::with('roles')
                             ->where('remember_token', '=', $token)
+                            ->get()
+                            ->filter(function ($user) {
+                                return $user->roles->contains('name', 'client');
+                            })
                             ->first();
 
             if ($user) {
@@ -464,10 +468,12 @@ class ClientController extends Controller
         
         // $user = User::where('remember_token', $request->etoken)->first();
 
-        $user = User::whereHas('roles', function ($query) {
-                                $query->where('name', '=', 'client');
-                              })
+        $user = User::with('roles')
                         ->where('remember_token', '=', $request->etoken)
+                        ->get()
+                        ->filter(function ($user) {
+                            return $user->roles->contains('name', 'client');
+                        })
                         ->first();
 
         if ($user) {
@@ -980,11 +986,12 @@ class ClientController extends Controller
     public function getList_admin()
     {
 
-        // get clientss
-        $users = User::whereHas('roles', function ($query) {
-                                $query->where('name', '=', 'client');
-                              })
-                              ->get();
+        // get clients - alternative approach to avoid Laravel 5.3 compact() bug
+        $users = User::with('roles')
+                     ->get()
+                     ->filter(function ($user) {
+                         return $user->roles->contains('name', 'client');
+                     });
 
         foreach ($users as $user) {
             $user->drop = $user->drop != null ? $this->drop[$user->drop] : '';
@@ -1406,8 +1413,10 @@ class ClientController extends Controller
     public function getNroCliente($action = null)
     {
 
-        $nro_cliente = User::whereHas('roles', function ($query) {
-                                $query->where('name', '=', 'client');
+        $nro_cliente = User::with('roles')
+                              ->get()
+                              ->filter(function ($user) {
+                                  return $user->roles->contains('name', 'client');
                               })
                               ->max('nro_cliente');
 
@@ -1421,7 +1430,8 @@ class ClientController extends Controller
     {
         
         // For work edit file : \vendor\zizaco\entrust\src\Entrust\Traits\EntrustRoleTrait.php #52
-        $users = Role::where('name', 'staff')->first()->users()->get();
+        $staffRole = Role::where('name', 'staff')->first();
+        $users = $staffRole ? $staffRole->users()->get() : collect([]);
         
         if (count($users)) {
 
@@ -1518,7 +1528,8 @@ class ClientController extends Controller
     {
         
         // For work edit file : \vendor\zizaco\entrust\src\Entrust\Traits\EntrustRoleTrait.php #52
-        $users = Role::where('name', 'client')->first()->users()->get();
+        $clientRole = Role::where('name', 'client')->first();
+        $users = $clientRole ? $clientRole->users()->get() : collect([]);
         
         if (count($users)) {
 
@@ -1546,7 +1557,8 @@ class ClientController extends Controller
         
 
         // For work edit file : \vendor\zizaco\entrust\src\Entrust\Traits\EntrustRoleTrait.php #52
-        $users = Role::where('name', 'client')->first()->users()->get();
+        $clientRole = Role::where('name', 'client')->first();
+        $users = $clientRole ? $clientRole->users()->get() : collect([]);
         
         // get last periodo facturado
         $last_periodo = Factura::orderBy('id', 'DESC')->first()->periodo;

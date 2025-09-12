@@ -39,7 +39,7 @@
                 <div class="form-group">
                   <label class="control-label col-md-3 col-sm-3 col-xs-12" for="max_cuotas">Nro. máximo de cuotas <span class="required">*</span></label>
                   <div class="col-md-6 col-sm-6 col-xs-12">
-                    <input type="text" id="max_cuotas" name="max_cuotas" class="form-control col-md-7 col-xs-12 @if ($errors->has('max_cuotas')) parsley-error @endif" value="{{ old('max_cuotas') ? old('max_cuotas') : (count($pagosConfig) ? $pagosConfig->max_cuotas : '') }}" placeholder="12" required>
+                    <input type="text" id="max_cuotas" name="max_cuotas" class="form-control col-md-7 col-xs-12 @if ($errors->has('max_cuotas')) parsley-error @endif" value="{{ old('max_cuotas') ? old('max_cuotas') : ($pagosConfig ? $pagosConfig->max_cuotas : '') }}" placeholder="12" required>
                     @if ($errors->has('max_cuotas')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('max_cuotas') }}</li></ul> @endif
                   </div>
                 </div>
@@ -47,7 +47,7 @@
                 <div class="form-group">
                   <label class="control-label col-md-3 col-sm-3 col-xs-12" for="tasa">Tasa Efectiva Mensual <span class="required">*</span></label>
                   <div class="col-md-6 col-sm-6 col-xs-12">
-                    <input type="text" id="tasa" name="tasa" class="form-control col-md-7 col-xs-12 @if ($errors->has('tasa')) parsley-error @endif" value="{{ old('tasa') ? old('tasa') : (count($pagosConfig) ? $pagosConfig->tasa : '') }}" placeholder="4">
+                    <input type="text" id="tasa" name="tasa" class="form-control col-md-7 col-xs-12 @if ($errors->has('tasa')) parsley-error @endif" value="{{ old('tasa') ? old('tasa') : ($pagosConfig ? $pagosConfig->tasa : '') }}" placeholder="4">
                     @if ($errors->has('tasa')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('tasa') }}</li></ul> @endif
                   </div>
                 </div>

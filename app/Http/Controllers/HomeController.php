@@ -133,9 +133,11 @@ class HomeController extends Controller
 
 
         // For work edit file : \vendor\zizaco\entrust\src\Entrust\Traits\EntrustRoleTrait.php #52
-        $users = Role::where('name', 'admin')->first()->users()->get();
+        $adminRole = Role::where('name', 'admin')->first();
+        $users = $adminRole ? $adminRole->users()->get() : collect([]);
 
         // get emails
+        $emails = [];
         foreach ($users as $user) {
             $emails[] = $user->email;
         }

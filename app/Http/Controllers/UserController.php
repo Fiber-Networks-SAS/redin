@@ -47,11 +47,12 @@ class UserController extends Controller
     public function getList_admin()
     {
 
-        // get admins
-        $users = User::whereHas('roles', function ($query) {
-                                $query->where('name', '=', 'admin');
-                              })
-                              ->get();
+        // get admins - alternative approach to avoid Laravel 5.3 compact() bug
+        $users = User::with('roles')
+                     ->get()
+                     ->filter(function ($user) {
+                         return $user->roles->contains('name', 'admin');
+                     });
 
         return Datatables::of($users)->make(true);
     }
