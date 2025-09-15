@@ -51,7 +51,7 @@
                   <th>Fecha de Emisión</th>
                   <th>Vencimiento</th>
                   <th>Importe</th>
-                  <th>Enviadao</th>
+                  <th>Enviado</th>
                   <th>Estado</th>
                   <th>Acciones</th>
                 </tr>

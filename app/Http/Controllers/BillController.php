@@ -117,7 +117,7 @@ class BillController extends Controller
     public function getList(Request $request)
     {
         $periodos = [];
-        $facturas = Factura::all()->groupBy('periodo');
+        $facturas = Factura::select(['id', 'periodo', 'fecha_pago', 'nro_cliente', 'importe_total'])->get()->groupBy('periodo');
         // return $facturas;
         
         foreach ($facturas as $periodo => $factura) {
@@ -1708,17 +1708,15 @@ class BillController extends Controller
     {
 
         $fecha_actual = Carbon::today();
-        $facturas = Factura::all();
+        $facturas = Factura::with(['talonario', 'cliente', 'detalle.servicio'])->get();
 
         foreach ($facturas as $factura) {
 
-            $factura->talonario;
             $factura->talonario->nro_punto_vta = $this->zerofill($factura->talonario->nro_punto_vta, 4);
             
             $factura->nro_factura = $this->zerofill($factura->nro_factura);
             $factura->nro_cliente = $this->zerofill($factura->nro_cliente, 5);
 
-            $factura->cliente;
             $factura->cliente->nombre_apellido = $factura->cliente->firstname.' '.$factura->cliente->lastname;
 
 
@@ -2592,15 +2590,12 @@ class BillController extends Controller
     public function tempFacturasPDF(Request $request)
     {
 
-        $facturas = Factura::all();
+        $facturas = Factura::with(['talonario', 'cliente', 'detalle.servicio'])->get();
         foreach ($facturas as $factura) {
-            $factura->talonario;
             $factura->talonario->nro_punto_vta = $this->zerofill($factura->talonario->nro_punto_vta, 4);
             
             $factura->nro_factura = $this->zerofill($factura->nro_factura);
             $factura->nro_cliente = $this->zerofill($factura->nro_cliente, 5);
-
-            $factura->cliente;
 
             $factura->fecha_emision = Carbon::parse($factura->fecha_emision)->format('d/m/Y');
             $factura->primer_vto_fecha = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
