@@ -39,8 +39,17 @@ class HomeController extends Controller
         // landimng page under construction
         // return View::make('construction');
 
+        // Obtener servicios activos para mostrar en la landing
+        $servicios = \App\Servicio::where('status', 1)->orderBy('nombre')->get();
+        
+        // Agregar iconos según el tipo de servicio
+        foreach ($servicios as $servicio) {
+            $servicio->icono = $this->getServiceIcon($servicio->tipo);
+            $servicio->tipo_nombre = $this->getServiceTypeName($servicio->tipo);
+        }
+
         // landimng page final
-        return View::make('landing');
+        return View::make('landing')->with(['servicios' => $servicios]);
 
 
         // send Mail
@@ -221,8 +230,44 @@ class HomeController extends Controller
     {
         Auth::logout();
         return redirect('/admin')->with('logout', true);
-    }  
+    }
 
+    /**
+     * Obtiene el icono FontAwesome según el tipo de servicio
+     * @param string $tipo
+     * @return string
+     */
+    private function getServiceIcon($tipo)
+    {
+        switch ($tipo) {
+            case '0': // Internet
+                return 'fa-wifi';
+            case '1': // Teléfono
+                return 'fa-phone';
+            case '2': // TV
+                return 'fa-tv';
+            default:
+                return 'fa-cog';
+        }
+    }
 
+    /**
+     * Obtiene el nombre del tipo de servicio
+     * @param string $tipo
+     * @return string
+     */
+    private function getServiceTypeName($tipo)
+    {
+        switch ($tipo) {
+            case '0':
+                return 'Internet';
+            case '1':
+                return 'Teléfono';
+            case '2':
+                return 'Televisión';
+            default:
+                return 'Otro';
+        }
+    }
 
 }

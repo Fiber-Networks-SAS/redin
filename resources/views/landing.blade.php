@@ -100,68 +100,74 @@
       <div class="heading wow fadeInUp" data-wow-duration="1000ms" data-wow-delay="300ms">
         <div class="row">
           <div class="text-center col-sm-8 col-sm-offset-2">
-            <h2>Servicios</h2>
-            <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore </p>
-            <p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. </p>
+            <h2>Nuestros Servicios</h2>
+            <p>Ofrecemos soluciones integrales en telecomunicaciones para satisfacer todas tus necesidades de conectividad.</p>
+            <p>Descubre nuestra amplia gama de servicios diseñados para brindarte la mejor experiencia en comunicaciones.</p>
           </div>
         </div> 
       </div>
       <div class="text-center our-services">
         <div class="row">
-          <div class="col-sm-4 wow fadeInDown" data-wow-duration="1000ms" data-wow-delay="300ms">
-            <div class="service-icon">
-              <i class="fa fa-cloud"></i>
+          @if(isset($servicios) && $servicios->count() > 0)
+            @foreach($servicios as $index => $servicio)
+              @php
+                // Configurar animaciones escalonadas
+                $animationClass = ($index < 3) ? 'wow fadeInDown' : 'wow fadeInUp';
+                $animationDelay = 300 + ($index % 3) * 150;
+              @endphp
+              <div class="col-sm-4 {{ $animationClass }}" data-wow-duration="1000ms" data-wow-delay="{{ $animationDelay }}ms">
+                <div class="service-icon">
+                  <i class="fa {{ $servicio->icono }}"></i>
+                </div>
+                <div class="service-info">
+                  <h3>{{ $servicio->nombre }}</h3>
+                  <p>
+                    <strong>{{ $servicio->tipo_nombre }}</strong><br>
+                    @if($servicio->detalle)
+                      {{ $servicio->detalle }}
+                    @else
+                      Abono mensual: ${{ number_format($servicio->abono_mensual, 2) }}
+                      @if($servicio->costo_instalacion)
+                        <br>Instalación: ${{ number_format($servicio->costo_instalacion, 2) }}
+                      @endif
+                    @endif
+                  </p>
+                </div>
+              </div>
+              @if(($index + 1) % 3 == 0 && ($index + 1) < $servicios->count())
+                </div><div class="row">
+              @endif
+            @endforeach
+          @else
+            <!-- Servicios por defecto si no hay en la base de datos -->
+            <div class="col-sm-4 wow fadeInDown" data-wow-duration="1000ms" data-wow-delay="300ms">
+              <div class="service-icon">
+                <i class="fa fa-wifi"></i>
+              </div>
+              <div class="service-info">
+                <h3>Internet</h3>
+                <p>Conexión de alta velocidad para tu hogar o empresa</p>
+              </div>
             </div>
-            <div class="service-info">
-              <h3>Servicio 1</h3>
-              <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore</p>
+            <div class="col-sm-4 wow fadeInDown" data-wow-duration="1000ms" data-wow-delay="450ms">
+              <div class="service-icon">
+                <i class="fa fa-phone"></i>
+              </div>
+              <div class="service-info">
+                <h3>Telefonía</h3>
+                <p>Servicio telefónico con cobertura nacional e internacional</p>
+              </div>
             </div>
-          </div>
-          <div class="col-sm-4 wow fadeInDown" data-wow-duration="1000ms" data-wow-delay="450ms">
-            <div class="service-icon">
-              <i class="fa fa-wifi"></i>
+            <div class="col-sm-4 wow fadeInDown" data-wow-duration="1000ms" data-wow-delay="600ms">
+              <div class="service-icon">
+                <i class="fa fa-tv"></i>
+              </div>
+              <div class="service-info">
+                <h3>Televisión</h3>
+                <p>Entretenimiento digital con la mejor calidad</p>
+              </div>
             </div>
-            <div class="service-info">
-              <h3>Servicio 2</h3>
-              <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore</p>
-            </div>
-          </div>
-          <div class="col-sm-4 wow fadeInDown" data-wow-duration="1000ms" data-wow-delay="550ms">
-            <div class="service-icon">
-              <i class="fa fa-phone"></i>
-            </div>
-            <div class="service-info">
-              <h3>Servicio 3</h3>
-              <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore</p>
-            </div>
-          </div>
-          <div class="col-sm-4 wow fadeInUp" data-wow-duration="1000ms" data-wow-delay="650ms">
-            <div class="service-icon">
-              <i class="fa fa-send-o"></i>
-            </div>
-            <div class="service-info">
-              <h3>Servicio 4</h3>
-              <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore</p>
-            </div>
-          </div>
-          <div class="col-sm-4 wow fadeInUp" data-wow-duration="1000ms" data-wow-delay="750ms">
-            <div class="service-icon">
-              <i class="fa fa-tachometer"></i>
-            </div>
-            <div class="service-info">
-              <h3>Servicio 5</h3>
-              <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore</p>
-            </div>
-          </div>
-          <div class="col-sm-4 wow fadeInUp" data-wow-duration="1000ms" data-wow-delay="850ms">
-            <div class="service-icon">
-              <i class="fa fa-cloud-upload"></i>
-            </div>
-            <div class="service-info">
-              <h3>Servicio 6</h3>
-              <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore</p>
-            </div>
-          </div>
+          @endif
         </div>
       </div>
     </div>
