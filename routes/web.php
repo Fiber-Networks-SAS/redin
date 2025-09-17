@@ -301,7 +301,7 @@ Route::get('/payment/failure', 'PaymentController@failure')->name('payment.failu
 Route::get('/payment/pending', 'PaymentController@pending')->name('payment.pending');
 
 // Webhook for MercadoPago notifications
-Route::post('/webhooks/mercadopago', 'PaymentController@webhook')->name('payment.webhook');
+Route::post('/webhooks/mercadopago', 'PaymentController@mercadoPagoWebhook')->name('payment.webhook');
 
 // API route for checking payment status
 Route::get('/api/payment/preference/{id}/status', 'PaymentController@checkPaymentStatus')->name('payment.status');

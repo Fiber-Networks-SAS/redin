@@ -88,6 +88,9 @@ class MercadoPagoService implements PaymentServiceInterface
             // Solo configurar webhook si tenemos una URL accesible públicamente
             if (strpos($baseUrl, 'localhost') === false && strpos($baseUrl, '127.0.0.1') === false) {
                 $preference->notification_url = $baseUrl . "/webhooks/mercadopago";
+                Log::info('Configurando notification_url para MercadoPago: ' . $baseUrl . "/webhooks/mercadopago");
+            } else {
+                Log::info('Webhook no configurado para desarrollo local');
             }
 
             // Configuraciones adicionales
@@ -229,23 +232,56 @@ class MercadoPagoService implements PaymentServiceInterface
             $type = isset($webhookData['type']) ? $webhookData['type'] : null;
             $dataId = isset($webhookData['data']['id']) ? $webhookData['data']['id'] : null;
 
-            if ($type === 'payment' && $dataId) {
-                $paymentInfo = $this->getPaymentStatus($dataId);
-                
-                return [
-                    'success' => true,
-                    'type' => 'payment',
-                    'payment_info' => $paymentInfo
-                ];
+            Log::info('Procesando webhook MercadoPago:', [
+                'type' => $type,
+                'data_id' => $dataId
+            ]);
+
+            switch ($type) {
+                case 'payment':
+                    if ($dataId) {
+                        $paymentInfo = $this->getPaymentStatus($dataId);
+                        
+                        return [
+                            'success' => true,
+                            'type' => 'payment',
+                            'payment_info' => $paymentInfo
+                        ];
+                    }
+                    break;
+                    
+                case 'plan':
+                case 'subscription':
+                case 'invoice':
+                    // Para futura implementación de suscripciones
+                    Log::info("Webhook tipo {$type} recibido, pero no implementado aún", [
+                        'data_id' => $dataId
+                    ]);
+                    return [
+                        'success' => true,
+                        'type' => $type,
+                        'message' => 'Tipo de webhook registrado pero no procesado'
+                    ];
+                    
+                default:
+                    Log::warning('Tipo de webhook desconocido:', [
+                        'type' => $type,
+                        'data' => $webhookData
+                    ]);
+                    break;
             }
 
             return [
                 'success' => false,
-                'error' => 'Tipo de webhook no soportado'
+                'error' => 'Tipo de webhook no soportado o datos insuficientes',
+                'type' => $type
             ];
 
         } catch (Exception $e) {
-            Log::error('Error procesando webhook: ' . $e->getMessage());
+            Log::error('Error procesando webhook MercadoPago: ' . $e->getMessage(), [
+                'webhook_data' => $webhookData,
+                'trace' => $e->getTraceAsString()
+            ]);
             
             return [
                 'success' => false,

@@ -85,8 +85,28 @@ class PaymentController extends Controller
     {
         try {
             $webhookData = $request->all();
+            $headers = $request->headers->all();
             
-            Log::info('Webhook MercadoPago recibido:', $webhookData);
+            Log::info('Webhook MercadoPago recibido:', [
+                'data' => $webhookData,
+                'user_agent' => $request->header('User-Agent'),
+                'ip' => $request->ip()
+            ]);
+
+            // Validar que el webhook venga de MercadoPago
+            if (!$this->validateMercadoPagoWebhook($request)) {
+                Log::warning('Webhook rechazado: no proviene de MercadoPago', [
+                    'ip' => $request->ip(),
+                    'user_agent' => $request->header('User-Agent')
+                ]);
+                return response()->json(['error' => 'Unauthorized'], 401);
+            }
+
+            // Validar estructura básica del webhook
+            if (!isset($webhookData['type']) || !isset($webhookData['data'])) {
+                Log::warning('Webhook con estructura inválida:', $webhookData);
+                return response()->json(['error' => 'Invalid webhook structure'], 400);
+            }
 
             // Procesar el webhook
             $result = $this->paymentService->processWebhook($webhookData);
@@ -95,29 +115,117 @@ class PaymentController extends Controller
                 $paymentInfo = $result['payment_info'];
                 
                 if ($paymentInfo['success']) {
-                    $this->processPaymentApproval($paymentInfo['payment_id']);
+                    $this->processPaymentApproval($paymentInfo);
+                    Log::info('Pago procesado exitosamente desde webhook:', [
+                        'payment_id' => $paymentInfo['payment_id'],
+                        'status' => $paymentInfo['status']
+                    ]);
                 }
             }
 
             return response()->json(['status' => 'ok'], 200);
 
         } catch (Exception $e) {
-            Log::error('Error procesando webhook MercadoPago: ' . $e->getMessage());
+            Log::error('Error procesando webhook MercadoPago: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
+            ]);
             return response()->json(['error' => 'Error interno'], 500);
         }
     }
 
     /**
+     * Validar que el webhook provenga de MercadoPago
+     */
+    protected function validateMercadoPagoWebhook(Request $request)
+    {
+        $userAgent = $request->header('User-Agent');
+        
+        // MercadoPago usa un User-Agent específico para sus webhooks
+        if (empty($userAgent) || strpos($userAgent, 'MercadoPago') === false) {
+            return false;
+        }
+
+        // Validar que tenga estructura de webhook válida
+        $data = $request->all();
+        if (!isset($data['type']) || !isset($data['data']['id'])) {
+            return false;
+        }
+
+        // Validar tipos de webhook permitidos
+        $allowedTypes = ['payment', 'plan', 'subscription', 'invoice'];
+        if (!in_array($data['type'], $allowedTypes)) {
+            return false;
+        }
+
+        // Validar rangos de IP de MercadoPago (opcional pero recomendado)
+        $clientIp = $request->ip();
+        if (!$this->isValidMercadoPagoIP($clientIp)) {
+            Log::warning('Webhook desde IP no autorizada', ['ip' => $clientIp]);
+            // En desarrollo permitir localhost, en producción comentar esta línea
+            if (!in_array($clientIp, ['127.0.0.1', '::1']) && config('app.env') !== 'local') {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    /**
+     * Validar si la IP pertenece a MercadoPago
+     */
+    protected function isValidMercadoPagoIP($ip)
+    {
+        // Rangos de IP conocidos de MercadoPago (actualizar según documentación)
+        $mercadoPagoRanges = [
+            '209.225.49.0/24',
+            '216.33.197.0/24',
+            '216.33.196.0/24'
+        ];
+
+        foreach ($mercadoPagoRanges as $range) {
+            if ($this->ipInRange($ip, $range)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Verificar si una IP está dentro de un rango CIDR
+     */
+    protected function ipInRange($ip, $range)
+    {
+        if (strpos($range, '/') === false) {
+            return $ip === $range;
+        }
+
+        list($subnet, $bits) = explode('/', $range);
+        $ip = ip2long($ip);
+        $subnet = ip2long($subnet);
+        $mask = -1 << (32 - $bits);
+        $subnet &= $mask;
+        
+        return ($ip & $mask) === $subnet;
+    }
+
+    /**
      * Procesar aprobación de pago
      */
-    protected function processPaymentApproval($paymentId)
+    protected function processPaymentApproval($paymentInfo)
     {
         try {
-            // Obtener información del pago desde MercadoPago
-            $paymentStatus = $this->paymentService->getPaymentStatus($paymentId);
-            
-            if (!$paymentStatus['success']) {
-                throw new Exception('No se pudo obtener información del pago: ' . $paymentStatus['error']);
+            // Si recibimos solo el ID, obtener la información completa
+            if (is_string($paymentInfo)) {
+                $paymentStatus = $this->paymentService->getPaymentStatus($paymentInfo);
+                
+                if (!$paymentStatus['success']) {
+                    throw new Exception('No se pudo obtener información del pago: ' . $paymentStatus['error']);
+                }
+            } else {
+                // Ya tenemos la información completa
+                $paymentStatus = $paymentInfo;
             }
 
             // Buscar la preferencia de pago por external_reference
@@ -136,7 +244,7 @@ class PaymentController extends Controller
             // Solo procesar si el pago está aprobado
             if ($paymentStatus['status'] === 'approved') {
                 // Marcar la preferencia como pagada
-                $paymentPreference->markAsPaid($paymentId);
+                $paymentPreference->markAsPaid($paymentStatus['payment_id']);
 
                 // Actualizar la factura si es necesario
                 $factura = $paymentPreference->factura;
@@ -149,6 +257,7 @@ class PaymentController extends Controller
                 // Marcar como rechazada si no está aprobada
                 if ($paymentStatus['status'] === 'rejected') {
                     $paymentPreference->markAsRejected();
+                    Log::info("Pago rechazado para external_reference: {$externalReference}");
                 }
             }
 

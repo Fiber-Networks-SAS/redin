@@ -12,6 +12,6 @@ class VerifyCsrfToken extends BaseVerifier
      * @var array
      */
     protected $except = [
-        //
+        'webhooks/*',  // Excluir todos los webhooks del CSRF
     ];
 }
