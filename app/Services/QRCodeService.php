@@ -27,9 +27,14 @@ class QRCodeService implements QRCodeServiceInterface
     public function generateQRCode($paymentUrl, array $options = [])
     {
         try {
+            Log::info('QRCodeService: Validating URL', ['url' => $paymentUrl]);
+            
             if (!$this->validatePaymentUrl($paymentUrl)) {
-                throw new Exception('URL de pago inválida');
+                Log::error('QRCodeService: URL validation failed', ['url' => $paymentUrl]);
+                throw new Exception('URL de pago inválida: ' . $paymentUrl);
             }
+            
+            Log::info('QRCodeService: URL validation passed', ['url' => $paymentUrl]);
 
             $options = array_merge($this->defaultOptions, $options);
 
@@ -130,7 +135,12 @@ class QRCodeService implements QRCodeServiceInterface
             return false;
         }
 
-        // Validar que sea de MercadoPago (opcional, para mayor seguridad)
+        $parsedUrl = parse_url($paymentUrl);
+        $domain = isset($parsedUrl['host']) ? $parsedUrl['host'] : '';
+        
+        Log::info('QRCodeService: Validating domain', ['domain' => $domain, 'full_url' => $paymentUrl]);
+        
+        // Validar que sea de MercadoPago (producción o sandbox)
         $mercadoPagoDomains = [
             'mercadopago.com',
             'mercadopago.com.ar',
@@ -139,23 +149,31 @@ class QRCodeService implements QRCodeServiceInterface
             'mercadopago.com.co',
             'mercadopago.cl',
             'mercadopago.com.pe',
-            'mercadopago.com.uy'
+            'mercadopago.com.uy',
+            'sandbox.mercadopago.com',
+            'sandbox.mercadopago.com.ar',
+            'sandbox.mercadopago.com.br',
+            'sandbox.mercadopago.com.mx',
+            'sandbox.mercadopago.com.co',
+            'sandbox.mercadopago.cl',
+            'sandbox.mercadopago.com.pe',
+            'sandbox.mercadopago.com.uy'
         ];
-
-        $parsedUrl = parse_url($paymentUrl);
-        $domain = isset($parsedUrl['host']) ? $parsedUrl['host'] : '';
         
         foreach ($mercadoPagoDomains as $allowedDomain) {
             if (strpos($domain, $allowedDomain) !== false) {
+                Log::info('QRCodeService: Domain validation passed', ['domain' => $domain, 'matched' => $allowedDomain]);
                 return true;
             }
         }
 
-        // También permitir URLs de sandbox
+        // Fallback: permitir cualquier URL que contenga 'sandbox' y 'mercadopago'
         if (strpos($domain, 'sandbox') !== false && strpos($domain, 'mercadopago') !== false) {
+            Log::info('QRCodeService: Sandbox fallback validation passed', ['domain' => $domain]);
             return true;
         }
 
+        Log::warning('QRCodeService: Domain validation failed', ['domain' => $domain, 'allowed_domains' => $mercadoPagoDomains]);
         return false;
     }
 

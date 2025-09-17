@@ -1461,25 +1461,48 @@ class BillController extends Controller
     protected function generatePaymentQRCodes(Factura $factura)
     {
         try {
+            Log::info('BillController: Generando QR codes para factura', ['factura_id' => $factura->id]);
+            
             // Cargar relación del cliente si no está cargada
             if (!$factura->cliente) {
                 $factura->load('cliente');
             }
 
             // Generar QR para primer vencimiento
-            $this->paymentQRService->createPaymentQR($factura, 'primer');
+            Log::info('BillController: Generando QR primer vencimiento', ['factura_id' => $factura->id]);
+            $result1 = $this->paymentQRService->createPaymentQR($factura, 'primer');
+            Log::info('BillController: Resultado QR primer vencimiento', [
+                'factura_id' => $factura->id, 
+                'success' => $result1 !== null,
+                'type' => $result1 ? get_class($result1) : 'null'
+            ]);
 
             // Generar QR para segundo vencimiento
-            $this->paymentQRService->createPaymentQR($factura, 'segundo');
+            Log::info('BillController: Generando QR segundo vencimiento', ['factura_id' => $factura->id]);
+            $result2 = $this->paymentQRService->createPaymentQR($factura, 'segundo');
+            Log::info('BillController: Resultado QR segundo vencimiento', [
+                'factura_id' => $factura->id, 
+                'success' => $result2 !== null,
+                'type' => $result2 ? get_class($result2) : 'null'
+            ]);
 
             // Generar QR para tercer vencimiento (si existe)
             if (!empty($factura->tercer_vto_importe) && $factura->tercer_vto_importe > 0) {
-                $this->paymentQRService->createPaymentQR($factura, 'tercer');
+                Log::info('BillController: Generando QR tercer vencimiento', ['factura_id' => $factura->id]);
+                $result3 = $this->paymentQRService->createPaymentQR($factura, 'tercer');
+                Log::info('BillController: Resultado QR tercer vencimiento', [
+                    'factura_id' => $factura->id, 
+                    'success' => $result3 !== null,
+                    'type' => $result3 ? get_class($result3) : 'null'
+                ]);
             }
+
+            Log::info('BillController: QR codes generation completed', ['factura_id' => $factura->id]);
 
         } catch (Exception $e) {
             // Log del error pero no interrumpe el proceso de facturación
             Log::error('Error generando códigos QR para factura ' . $factura->id . ': ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
         }
     }
 

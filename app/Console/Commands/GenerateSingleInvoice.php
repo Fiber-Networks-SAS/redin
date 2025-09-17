@@ -58,10 +58,12 @@ class GenerateSingleInvoice extends Command
             $this->info("Período: {$period}");
             $this->info("Importe: \${$amount}");
             
-            if (!$this->confirm('¿Continuar con la generación de la factura?')) {
-                $this->info('Operación cancelada');
-                return 0;
-            }
+            // Temporalmente no interactivo para debugging
+            // if (!$this->confirm('¿Continuar con la generación de la factura?')) {
+            //     $this->info('Operación cancelada');
+            //     return 0;
+            // }
+            $this->info('Continuando con la generación automática...');
             
             // Obtener talonario (usar el primero disponible)
             $talonario = Talonario::first();
@@ -134,17 +136,8 @@ class GenerateSingleInvoice extends Command
                 $this->warn("⚠ Error agregando detalle: " . $e->getMessage());
             }
             
-                    // Generar PDF si se solicitó
-        if ($this->option('pdf')) {
-            $this->info('Generando PDF...');
-            $paymentQRService = app('App\Services\PaymentQRService');
-            $billController = new BillController($paymentQRService);
-            $billController->setFacturasPeriodoPDF($period, $factura->id);
-            $this->info('✓ PDF generado exitosamente');
-        }
-            
             // Generar códigos QR si se solicita
-            if ($generateQr || $this->confirm('¿Generar códigos QR de MercadoPago?', true)) {
+            if ($generateQr || true) { // Temporalmente siempre generar QR
                 $this->info('Generando códigos QR...');
                 
                 try {
@@ -163,6 +156,19 @@ class GenerateSingleInvoice extends Command
                     
                 } catch (Exception $e) {
                     $this->error("Error generando QR: " . $e->getMessage());
+                }
+            }
+            
+            // Generar PDF después de los QR codes para incluirlos
+            if ($generatePdf) {
+                $this->info('Generando PDF con QR codes...');
+                try {
+                    $paymentQRService = app('App\Services\PaymentQRService');
+                    $billController = new BillController($paymentQRService);
+                    $billController->setFacturasPeriodoPDF($period, $factura->id);
+                    $this->info('✓ PDF generado exitosamente');
+                } catch (Exception $e) {
+                    $this->error("Error generando PDF: " . $e->getMessage());
                 }
             }
             

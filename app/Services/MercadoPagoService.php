@@ -103,12 +103,26 @@ class MercadoPagoService implements PaymentServiceInterface
             $preference->save();
 
             if ($preference->id) {
+                // Determinar qué URL usar según la configuración de sandbox
+                $isSandbox = config('services.mercadopago.sandbox', false) || 
+                           config('app.env') === 'local' || 
+                           config('app.env') === 'development';
+                
+                $initPoint = $isSandbox ? $preference->sandbox_init_point : $preference->init_point;
+                
+                Log::info('MercadoPago preference created:', [
+                    'preference_id' => $preference->id,
+                    'is_sandbox' => $isSandbox,
+                    'init_point' => $initPoint
+                ]);
+                
                 return [
                     'success' => true,
                     'preference_id' => $preference->id,
-                    'init_point' => $preference->init_point,
+                    'init_point' => $initPoint,
                     'sandbox_init_point' => $preference->sandbox_init_point,
-                    'public_key' => $this->publicKey
+                    'public_key' => $this->publicKey,
+                    'is_sandbox' => $isSandbox
                 ];
             } else {
                 throw new Exception('Error al crear la preferencia de pago');

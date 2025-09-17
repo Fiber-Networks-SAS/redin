@@ -45,7 +45,16 @@ class PaymentQRService
             if (!$preferenceResult['success']) {
                 throw new Exception('Error al crear preferencia de MercadoPago: ' . $preferenceResult['error']);
             }
-
+            
+            // Log para confirmar qué URL se está utilizando
+            $isSandbox = isset($preferenceResult['is_sandbox']) ? $preferenceResult['is_sandbox'] : false;
+            Log::info('Generando QR con URL de ' . ($isSandbox ? 'SANDBOX' : 'PRODUCCIÓN'), [
+                'factura_id' => $factura->id,
+                'vencimiento_tipo' => $vencimientoTipo,
+                'init_point' => $preferenceResult['init_point'],
+                'is_sandbox' => $isSandbox
+            ]);
+            
             // Generar código QR con la URL de pago (parámetros optimizados para mejor legibilidad)
             $qrCodeBase64 = $this->qrCodeService->generateQRCode($preferenceResult['init_point'], [
                 'size' => 200,        // Aumentado de 150 a 200
@@ -70,11 +79,7 @@ class PaymentQRService
             Log::error('Error creando QR de pago: ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
             
-            return [
-                'success' => false,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ];
+            return null;
         }
     }
 
