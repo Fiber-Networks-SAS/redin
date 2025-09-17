@@ -11,7 +11,7 @@ return [
 	'description' 				 => '',
 	'copy'	  					 => 'ReDin' . ' - ' . date('Y'),
 	'developer'					 => '',
-	'company_razon_social'		 => 'QTY S.A.',
+	'company_razon_social'		 => 'ReDin',
 	'company_iva'				 => 'IVA RESPONSABLE INSCRIPTO',
 	'company_cuit'				 => 30708530146,
 	'company_iibb'				 => 9010726205,

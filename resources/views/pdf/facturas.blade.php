@@ -236,7 +236,7 @@
             <div class="row">
                 
                 <div class="info_empresa">
-                    <p>{{ config('constants.title') }} - {{ config('constants.company_razon_social') }}</p>
+                    <p>{{ config('constants.title') }}</p>
                     <p>{{ config('constants.company_dir') }}</p>
                     <p>CUIT: {{ config('constants.company_cuit') }}</p>
                     <p>IIBB: {{ config('constants.company_iibb') }}</p>
@@ -248,7 +248,7 @@
                 </div>
 
                 <div class="info_factura">
-                    <p>Recibo: {{$factura->talonario->nro_punto_vta}} - {{$factura->nro_factura}}</p>
+                    <p>Factura: {{$factura->talonario->nro_punto_vta}} - {{$factura->nro_factura}}</p>
                     <p><strong>{{ strtoupper($factura->cliente->firstname.' '.$factura->cliente->lastname) }}</strong></p>
                     <p>Nro. Cliente: {{$factura->nro_cliente}}</p>
                     <p>DNI/CUIT: {{$factura->cliente->dni}}</p>
@@ -403,11 +403,10 @@
                     </ul>
                 </div>
                 
-                <h4>Descargue y controle su recibo online</h4>
+                <h4>Descargue y controle su factura online</h4>
                 <p>{{ config('constants.company_web') }}</p>        
                 <p>Tel.: {{ config('constants.company_tel') }}</p>
                 <p>{{ config('constants.account_info') }}</p>
-                <p><strong>*Condiciones de servicios exclusivos de CobroExpress IPLYC - SE. y Pago Mis Cuentas</strong></p>        
             </div>
         </div>
 
