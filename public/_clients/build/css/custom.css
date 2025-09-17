@@ -208,7 +208,7 @@
   position: fixed; }
 
 body .container.body .right_col {
-  background: #028fcc; }
+  background: #0000FF; }
 
 .nav-md .container.body .right_col {
   padding: 10px 20px 0;
@@ -217,7 +217,7 @@ body .container.body .right_col {
 .nav_title {
   width: 230px;
   float: left;
-  background: #028fcc;
+  background: #0000FF;
   border-radius: 0;
   height: 57px; 
   font: normal 60px  'Open Sans', sans-serif;
@@ -496,7 +496,7 @@ a:hover, a:focus {
 
 .nav.side-menu > li {
     margin: 10px;
-    background-color: #028fcc;
+    background-color: #0000FF;
     font-size: 15px;
     position: relative;
     display: block;
@@ -681,7 +681,7 @@ a:hover, a:focus {
   padding: 4px 6px; }
 
 footer {
-  background: #028fcc;
+  background: #0000FF;
   padding: 10px 20px;
   display: block; 
   font: normal 7px  'Open Sans', sans-serif;
@@ -1906,7 +1906,7 @@ button,
 /* *********  form design  **************************** */
 .editor.btn-toolbar {
   zoom: 1;
-  background: #028fcc;
+  background: #0000FF;
   margin: 5px 2px;
   padding: 3px 0;
   border: 1px solid #EFEFEF; }
@@ -2876,7 +2876,7 @@ ul.project_files li a i {
 
 .caption {
   padding: 9px 5px;
-  background: #028fcc; }
+  background: #0000FF; }
 
 .caption p {
   margin-bottom: 5px; }
@@ -2986,10 +2986,10 @@ ul.project_files li a i {
   padding-top: 2px; }
 
 .tabs-left {
-  border-right: 1px solid #028fcc; }
+  border-right: 1px solid #0000FF; }
 
 .tabs-right {
-  border-left: 1px solid #028fcc; }
+  border-left: 1px solid #0000FF; }
 
 .tabs-left > li, .tabs-right > li {
   float: none;
@@ -3002,25 +3002,25 @@ ul.project_files li a i {
   margin-left: -1px; }
 
 .tabs-left > li.active > a, .tabs-left > li.active > a:hover, .tabs-left > li.active > a:focus {
-  border-bottom-color: #028fcc;
+  border-bottom-color: #0000FF;
   border-right-color: transparent; }
 
 .tabs-right > li.active > a, .tabs-right > li.active > a:hover, .tabs-right > li.active > a:focus {
-  border-bottom: 1px solid #028fcc;
+  border-bottom: 1px solid #0000FF;
   border-left-color: transparent; }
 
 .tabs-left > li > a {
   border-radius: 4px 0 0 4px;
   margin-right: 0;
   display: block;
-  background: #028fcc;
+  background: #0000FF;
   text-overflow: ellipsis;
   overflow: hidden; }
 
 .tabs-right > li > a {
   border-radius: 0 4px 4px 0;
   margin-right: 0;
-  background: #028fcc;
+  background: #0000FF;
   text-overflow: ellipsis;
   overflow: hidden; }
 
@@ -3144,7 +3144,7 @@ ul.project_files li a i {
 /* *********  /ecommerce  **************************** */
 /** login **/
 .login {
-  background: #028fcc; }
+  background: #0000FF; }
 
 .login .fa-paw {
   font-size: 26px; }
@@ -3297,7 +3297,7 @@ a.hiddenanchor {
   color: #FFFFFF!important;
   margin: 0 0 20px;
   width: 100%; 
-  background-color: #028fcc!important;
+  background-color: #0000FF!important;
 }
 
 
@@ -4231,7 +4231,7 @@ ul.notifications {
 
 .activate_account{
     color: #fff;
-    background: #028fcc;
+    background: #0000FF;
     font-family: "Helvetica Neue", Roboto, Arial, "Droid Sans", sans-serif;
     font-size: 13px;
     font-weight: 400;

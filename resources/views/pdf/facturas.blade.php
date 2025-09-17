@@ -13,32 +13,30 @@
         }
         
         .title{
-                background-color: #028fcc;
+                background-color: #0000FF;
                 height: 90px;
         }
         .title img{
-            width: 100px;
-            background-color: #fff;
+            width: 200px;
             border-radius: 5px;
             margin: 10px;
             display: inline-block;
         }        
-        .title h1{
+        /* .title h1{
             margin: 0 10px;
             color: #fff;
             font-size: 40px;
             line-height: 15px;
             display: inline-block;
-            /*border:1px solid orange;*/
             text-align: right;
             width: 640px;
-        }
+        } */
         
         .header{
             padding: 10px 10px;
             width: 100%;
             height: 190px;
-            border: 1px solid #028fcc;
+            border: 1px solid #0000FF;
         }
         .header .row{
             display: block;
@@ -75,13 +73,25 @@
         .header .row .cod_barras{
             float: left;
             width: 435px;
-            height: 100px;
+            height: 80px;
+            text-align: center;
         }
-        .header .row .cod_barras p{
-            text-align: left;
-            /*margin-left: 30px;*/
-            font-size: 12px;
-
+        .footer .vencimiento .cod_barras{
+            width: 100%;
+            height: 110px;
+            text-align: center;
+        }
+        .header .row .cod_barras img{
+            display: inline-block;
+            vertical-align: middle;
+            line-height: normal;
+            margin-top: -40px;
+        }
+        .cod_barras p{
+            text-align: center;
+            margin: 5px 0 0 0;
+            font-size: 10px;
+            font-weight: bold;
         }
         .header .row .darkness{
             float: left;
@@ -154,28 +164,31 @@
             position: absolute;
         }
         .footer .vencimiento{
-            text-align: left;
-            margin: 20px 0;
-            border: 1px solid #cdcdcd;
-            height: 100px;
-            width: 510px;
+            text-align: center;
+            border: 2px solid #0000FF;
+            border-radius: 8px;
+            width: 100%;
+            padding: 15px;
+            background-color: #f9f9f9;
+            height: 180px;
         }
         .footer .vencimiento .vto_title{
-            background-color:#eee;
+            background-color: #0000FF;
+            color: white;
             padding: 10px;
-            margin: 0 0 5px 0; 
+            margin: -15px -15px 15px -15px;
             font-weight: bold;
-        }
-        .footer .vencimiento .cod_barras{
-            margin-top: 10px;
-            text-align: center;
-            float: left;
-            width: 370px;
+            border-radius: 6px 6px 0 0;
+            font-size: 13px;
         }
         .footer .vencimiento .darkness{
-            text-align: left;
-            float: left;
-            width: 300px;
+            text-align: center;
+            margin-top: 10px;
+        }
+        .footer .vencimiento .darkness p{
+            margin: 3px 0;
+            font-size: 13px;
+            font-weight: bold;
         }
         .footer .info{
             clear: both;    
@@ -194,24 +207,28 @@
 <body>
 
     <?php 
-        
-        /*
-        $generator = new Picqer\Barcode\BarcodeGeneratorHTML();
-        echo $generator->getBarcode('307085301460001705620171215000047', $generator::TYPE_CODE_128, 2, 50);
-        echo '<br>';
-        */
-
         $i = 1;
-        $generator = new \Picqer\Barcode\BarcodeGeneratorPNG();
-    
+        
+        // Función simple para renderizar QR
+        function qr($qrData, $fallbackCode, $size = '80px') {
+            if ($qrData && $qrData->qr_code_base64) {
+                return '<img src="data:image/png;base64,'.$qrData->qr_code_base64.'" style="width:'.$size.';height:'.$size.';" alt="QR">';
+            }
+        }
     ?>
 
     <?php foreach ($facturas as $factura): ?>
 
+        <?php 
+            // Obtener códigos QR de MercadoPago para esta factura
+            $qrCodePrimer = $factura->getPaymentPreferenceByVencimiento('primer');
+            $qrCodeSegundo = $factura->getPaymentPreferenceByVencimiento('segundo');
+            $qrCodeTercer = $factura->getPaymentPreferenceByVencimiento('tercer');
+        ?>
+
 
         <div class="title">
             <img src="{{ config('constants.logo_pdf') }}" alt="Logo">
-            <h1>{{ config('constants.title') }}</h1>
         </div>
 
         <div class="header">
@@ -242,9 +259,7 @@
             
             <div class="row">
                 <div class="cod_barras">
-                    <!-- <img src='http://barcode.tec-it.com/barcode.ashx?translate-esc=off&data={{$factura->primer_vto_codigo}}&code=Code128&unit=Fit&dpi=96&imagetype=Gif&rotation=0&color=000000&bgcolor=FFFFFF&qunit=Mm&quiet=0' alt='Barcode Generator TEC-IT'/> -->
-                    <?php echo '<img src="data:image/png;base64,' . base64_encode($generator->getBarcode($factura->primer_vto_codigo, $generator::TYPE_CODE_128, 1, 55)) . '">'; ?>
-                    <p>{{$factura->primer_vto_codigo}}</p>
+                    <?php echo qr($qrCodePrimer, $factura->primer_vto_codigo, '135px'); ?>
                 </div>
         
                 <div class="darkness">
@@ -344,35 +359,40 @@
     
         <div class="footer">
 
-            <div class="vencimiento">
-                <p class="vto_title">Segundo Vencimiento</p>
-                
-                <div class="cod_barras">
-                    <?php echo '<img src="data:image/png;base64,' . base64_encode($generator->getBarcode($factura->segundo_vto_codigo, $generator::TYPE_CODE_128, 1, 40)) . '">'; ?>
-                    <p>{{$factura->segundo_vto_codigo}}</p>
-                </div>
-        
-                <div class="darkness">
-                    <p>Importe: ${{$factura->segundo_vto_importe}}</p>
-                    <p>Vencimiento: {{$factura->segundo_vto_fecha}}</p>
-                </div>
-            </div>
+            <div style="width: 100%; overflow: hidden;">
+                <div style="width: 48%; float: left; margin-right: 3%;">
+                    <div class="vencimiento">
+                        <p class="vto_title">Segundo Vencimiento</p>
 
-            <?php if($factura->tercer_vto_codigo): ?>
-                <div class="vencimiento">
-                    <p class="vto_title">Tercer Vencimiento</p>
-                    
-                    <div class="cod_barras">
-                        <?php echo '<img src="data:image/png;base64,' . base64_encode($generator->getBarcode($factura->tercer_vto_codigo, $generator::TYPE_CODE_128, 1, 40)) . '">'; ?>
-                        <p>{{$factura->tercer_vto_codigo}}</p>
-                    </div>
-            
-                    <div class="darkness">
-                        <p>Importe: ${{$factura->tercer_vto_importe}}</p>
-                        <p>Vencimiento: {{$factura->tercer_vto_fecha}}</p>
+                        <div class="cod_barras" style="margin-top: -10px; margin-bottom: 10px;">
+                            <?php echo qr($qrCodeSegundo, $factura->segundo_vto_codigo, '135px'); ?>
+                        </div>
+                
+                        <div class="darkness">
+                            <p>Importe: ${{$factura->segundo_vto_importe}}</p>
+                            <p>Vencimiento: {{$factura->segundo_vto_fecha}}</p>
+                        </div>
                     </div>
                 </div>
-            <?php endif; ?>
+                
+                <?php if($factura->tercer_vto_codigo): ?>
+                <div style="width: 48%; float: left;">
+                    <div class="vencimiento">
+                        <p class="vto_title">Tercer Vencimiento</p>
+
+                        <div class="cod_barras" style="margin-top: -10px; margin-bottom: 10px;">
+                            <?php echo qr($qrCodeTercer, $factura->tercer_vto_codigo, '135px'); ?>
+                        </div>
+                
+                        <div class="darkness">
+                            <p>Importe: ${{$factura->tercer_vto_importe}}</p>
+                            <p>Vencimiento: {{$factura->tercer_vto_fecha}}</p>
+                        </div>
+                    </div>
+                </div>
+                <?php endif; ?>
+                <div style="clear: both;"></div>
+            </div>
 
             <div class="info">
                 <div class="mensaje">

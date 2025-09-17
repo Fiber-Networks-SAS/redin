@@ -199,6 +199,9 @@ return [
         // Laravel-Backup https://docs.spatie.be/laravel-backup/v3/introduction 
         Spatie\Backup\BackupServiceProvider::class,
 
+        // Payment Service Provider (MercadoPago y QR)
+        App\Providers\PaymentServiceProvider::class,
+
         // Laravel-Excel  https://laravel-excel.maatwebsite.nl/docs/2.1/getting-started/installation
         Maatwebsite\Excel\ExcelServiceProvider::class,
 

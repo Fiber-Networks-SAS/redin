@@ -35,10 +35,14 @@ use App\Interes;
 use App\Cuota;
 use App\PagosConfig;
 use App\ImportCe;
+use App\PaymentPreference;
+use App\Services\PaymentQRService;
 
 // use Entrust;
 use PDF;
 use Carbon\Carbon;
+use Exception;
+use Illuminate\Support\Facades\Log;
 
 /*
     --- FOR SEND EMAIL ---
@@ -79,15 +83,17 @@ use Carbon\Carbon;
 
 class BillController extends Controller
 {
-    
+    protected $paymentQRService;
 
-    public function __construct()
+    public function __construct(PaymentQRService $paymentQRService)
     {
         // $this->middleware('auth');
 
         // Check user permission 
         // $this->middleware('permission:crud-users');
 
+        $this->paymentQRService = $paymentQRService;
+        
         $this->tipo = ['Internet', 'Telefonía', 'Televisión'];
         $this->drop = ['En Pilar', 'En Domicilio', 'Sin Drop'];
         $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express',]; // 4 => 'Tarjeta de Crédito', 5 => 'Depósito'
@@ -1427,7 +1433,11 @@ class BillController extends Controller
             // genero los PDF's de las facturas individuales
             if ($factura_id == null || $factura_id == $factura->id) {
 
-                $pdf = PDF::loadView('pdf.facturas', ['facturas' => [$factura]]); // envio como parametro un array con la factura
+                // Primero generar códigos QR de MercadoPago para cada vencimiento
+                $this->generatePaymentQRCodes($factura);
+
+                // Crear PDF (los códigos QR se obtienen desde la vista usando el método del modelo)
+                $pdf = PDF::loadView('pdf.facturas', ['facturas' => [$factura]]);
                 $pdf->save($factura->filePath);
     
             }
@@ -1443,6 +1453,34 @@ class BillController extends Controller
         
         // return $facturas;
         return true;
+    }
+
+    /**
+     * Generar códigos QR de MercadoPago para una factura
+     */
+    protected function generatePaymentQRCodes(Factura $factura)
+    {
+        try {
+            // Cargar relación del cliente si no está cargada
+            if (!$factura->cliente) {
+                $factura->load('cliente');
+            }
+
+            // Generar QR para primer vencimiento
+            $this->paymentQRService->createPaymentQR($factura, 'primer');
+
+            // Generar QR para segundo vencimiento
+            $this->paymentQRService->createPaymentQR($factura, 'segundo');
+
+            // Generar QR para tercer vencimiento (si existe)
+            if (!empty($factura->tercer_vto_importe) && $factura->tercer_vto_importe > 0) {
+                $this->paymentQRService->createPaymentQR($factura, 'tercer');
+            }
+
+        } catch (Exception $e) {
+            // Log del error pero no interrumpe el proceso de facturación
+            Log::error('Error generando códigos QR para factura ' . $factura->id . ': ' . $e->getMessage());
+        }
     }
 
     // merge PDF facturas

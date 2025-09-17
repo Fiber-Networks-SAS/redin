@@ -39,4 +39,17 @@ class Factura extends Model implements AuditableContract
     {
         return $this->hasOne('App\User', 'id', 'user_id');
     }
+
+    public function paymentPreferences()
+    {
+        return $this->hasMany('App\PaymentPreference', 'factura_id');
+    }
+
+    public function getPaymentPreferenceByVencimiento($vencimientoTipo)
+    {
+        return $this->paymentPreferences()
+            ->where('vencimiento_tipo', $vencimientoTipo)
+            ->where('status', '!=', 'cancelled')
+            ->first();
+    }
 }
