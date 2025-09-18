@@ -1902,6 +1902,13 @@ class BillController extends Controller
                 $filename = 'balance_general' . $cliente . $periodo . '_' . $fecha . '.xls';
 
                 $excelFilename = 'Balance de pagos ReDin';
+
+                // Asegurar que el directorio existe
+                $directory = public_path(config('constants.folder_balance_xls'));
+                if (!file_exists($directory)) {
+                    mkdir($directory, 0755, true);
+                }
+
                 \Excel::create($excelFilename, function ($excel) use ($response) {
 
                     $excel->sheet('Balance', function ($sheet) use ($response) {
@@ -1922,26 +1929,25 @@ class BillController extends Controller
                             'Importe Pagado'
                         ));
 
-                        foreach ($response as $key => $periodo):
+                        foreach ($response as $key => $periodo) {
 
                             // totales
-                            $footer_facturas_total  = $footer_facturas_total + $periodo['facturas_total'];
-                            $footer_facturas_pagadas  = $footer_facturas_pagadas + $periodo['facturas_pagadas'];
-                            $footer_facturas_adeudadas   = $footer_facturas_adeudadas  + $periodo['facturas_adeudadas'];
-                            $footer_importe_facturado  = $footer_importe_facturado  + $periodo['importe_facturado'];
-                            $footer_importe_pagado = $footer_importe_pagado + $periodo['importe_pagado'];
+                            $footer_facturas_total += (int)($periodo['facturas_total'] ?? 0);
+                            $footer_facturas_pagadas += (int)($periodo['facturas_pagadas'] ?? 0);
+                            $footer_facturas_adeudadas += (int)($periodo['facturas_adeudadas'] ?? 0);
+                            $footer_importe_facturado += (float)($periodo['importe_facturado'] ?? 0);
+                            $footer_importe_pagado += (float)($periodo['importe_pagado'] ?? 0);
 
                             // Convertir todos los valores a string para evitar problemas con PHPExcel
                             $sheet->appendRow(array(
-                                (string)$periodo['periodo'],
-                                (string)$periodo['facturas_total'],
-                                (string)$periodo['facturas_pagadas'],
-                                (string)$periodo['facturas_adeudadas'],
-                                (string)number_format($periodo['importe_facturado'], 2),
-                                (string)number_format($periodo['importe_pagado'], 2)
+                                (string)($periodo['periodo'] ?? ''),
+                                (string)($periodo['facturas_total'] ?? '0'),
+                                (string)($periodo['facturas_pagadas'] ?? '0'),
+                                (string)($periodo['facturas_adeudadas'] ?? '0'),
+                                (string)number_format($periodo['importe_facturado'] ?? 0, 2),
+                                (string)number_format($periodo['importe_pagado'] ?? 0, 2)
                             ));
-
-                        endforeach;
+                        }
 
                         // add total general - también convertir a string
                         $sheet->appendRow(array(
@@ -1954,21 +1960,20 @@ class BillController extends Controller
                         ));
                     });
                 })
-                    ->store('xls', config('constants.folder_balance_xls'));
+                    ->store('xls', public_path(config('constants.folder_balance_xls')));
 
                 return $filename;
             } catch (\Exception $e) {
-
-                return $e;
+                \Log::error('Error generando Excel: ' . $e->getMessage());
+                return null;
             }
         }
+        return null;
     }
 
     public function getBalanceXLS(Request $request)
     {
-
         try {
-
             // Usar filtros de la sesión si existen, sino generar balance general
             $filters = session('balance_filters', []);
 
@@ -1993,11 +1998,21 @@ class BillController extends Controller
                 }
             }
 
-            $downloadFilename = isset($filename) ? $filename : 'balance_general_' . date('Y-m-d_H-i-s') . '.xls';
-            $filePath = config('constants.folder_balance_xls') . $downloadFilename;
-            return response()->download($filePath);
-        } catch (\Exception $e) {
+            if (!isset($filename) || !$filename) {
+                return View::make('errors.404');
+            }
 
+            $filePath = public_path(config('constants.folder_balance_xls') . $filename);
+
+            // Verificar que el archivo existe antes de intentar descargarlo
+            if (!file_exists($filePath)) {
+                \Log::error('Archivo Excel no encontrado: ' . $filePath);
+                return View::make('errors.404');
+            }
+
+            return response()->download($filePath)->deleteFileAfterSend(true);
+        } catch (\Exception $e) {
+            \Log::error('Error en getBalanceXLS: ' . $e->getMessage());
             return View::make('errors.404');
         }
     }
