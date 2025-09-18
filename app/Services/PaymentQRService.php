@@ -123,7 +123,7 @@ class PaymentQRService
                 return [
                     'title' => $baseTitle . ' - Primer Vencimiento',
                     'description' => $baseDescription . ' - Primer vencimiento',
-                    'amount' => $factura->importe_total,
+                    'amount' => $this->parseAmount($factura->importe_total),
                     'external_reference' => $factura->id . '_primer_' . time(),
                     'payer' => [
                         'name' => $factura->cliente ? $factura->cliente->firstname : 'Cliente',
@@ -140,7 +140,7 @@ class PaymentQRService
                 return [
                     'title' => $baseTitle . ' - Segundo Vencimiento',
                     'description' => $baseDescription . ' - Segundo vencimiento con recargo',
-                    'amount' => $factura->segundo_vto_importe,
+                    'amount' => $this->parseAmount($factura->segundo_vto_importe),
                     'external_reference' => $factura->id . '_segundo_' . time(),
                     'payer' => [
                         'name' => $factura->cliente ? $factura->cliente->firstname : 'Cliente',
@@ -161,7 +161,7 @@ class PaymentQRService
                 return [
                     'title' => $baseTitle . ' - Tercer Vencimiento',
                     'description' => $baseDescription . ' - Tercer vencimiento con recargo máximo',
-                    'amount' => $factura->tercer_vto_importe,
+                    'amount' => $this->parseAmount($factura->tercer_vto_importe),
                     'external_reference' => $factura->id . '_tercer_' . time(),
                     'payer' => [
                         'name' => $factura->cliente ? $factura->cliente->firstname : 'Cliente',
@@ -258,5 +258,26 @@ class PaymentQRService
             ->first();
 
         return $preferences;
+    }
+
+    /**
+     * Convierte un valor que puede estar formateado con comas a un float válido
+     * 
+     * @param mixed $amount
+     * @return float
+     */
+    private function parseAmount($amount)
+    {
+        if (is_numeric($amount)) {
+            return (float) $amount;
+        }
+        
+        // Si es string, remover comas y convertir a float
+        if (is_string($amount)) {
+            $cleaned = str_replace(',', '', $amount);
+            return is_numeric($cleaned) ? (float) $cleaned : 0.0;
+        }
+        
+        return 0.0;
     }
 }
