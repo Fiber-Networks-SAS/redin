@@ -784,11 +784,14 @@ class BillController extends Controller
         // obtengo el siguiente mes a facturar 
         $factura    = Factura::orderBy('id', 'desc')->first();
 
-        if ($factura) {
-
-            $periodo_actual    = Carbon::createFromFormat('m/Y', $factura->periodo);
-            $periodo_siguiente = $periodo_actual->addMonth();
-            $periodo_siguiente = Carbon::parse($periodo_siguiente)->format('m/Y');
+        if ($factura && $factura->periodo && preg_match('/^\d{1,2}\/\d{4}$/', $factura->periodo)) {
+            try {
+                $periodo_actual    = Carbon::createFromFormat('m/Y', $factura->periodo);
+                $periodo_siguiente = $periodo_actual->addMonth();
+                $periodo_siguiente = Carbon::parse($periodo_siguiente)->format('m/Y');
+            } catch (Exception $e) {
+                $periodo_siguiente = date('m/Y');
+            }
         } else {
 
             $periodo_siguiente = date('m/Y');
@@ -2277,8 +2280,11 @@ class BillController extends Controller
 
         // obtengo el ultimo periodo
         $factura = Factura::orderBy('id', 'desc')->first();
+        
+        // Si no existe factura o el periodo está vacío, uso el periodo actual
+        $periodo = ($factura && $factura->periodo) ? $factura->periodo : date('m/Y');
 
-        return View::make('bill_single.create')->with(['periodo' => $factura->periodo]);
+        return View::make('bill_single.create')->with(['periodo' => $periodo]);
     }
 
     // facturo el periodo
