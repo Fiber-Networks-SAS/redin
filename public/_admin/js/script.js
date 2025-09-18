@@ -830,7 +830,7 @@ $(document).ready(function () {
 
                             return '<a href="' + obj.pdf + '" target="_blank" class="btn btn-info btn-xs"><i class="fa fa-eye"></i> Ver PDF</a>' +
                                    '<a href="/admin/period/view/' + obj.periodo + '" class="btn btn-success btn-xs"><i class="fa fa-file-text-o"></i> Ver Facturas</a>' +
-                                   '<a href="/admin/period/download/pmc/' + obj.periodo + '" class="btn btn-primary btn-xs" title="Descargar Archivo de Pago Mis Cuentas"><i class="fa fa-file-powerpoint-o"></i> Archivo PMC</a>' +
+                                   //'<a href="/admin/period/download/pmc/' + obj.periodo + '" class="btn btn-primary btn-xs" title="Descargar Archivo de Pago Mis Cuentas"><i class="fa fa-file-powerpoint-o"></i> Archivo PMC</a>' +
                                    '<a href="/admin/period/send/' + obj.periodo + '" class="btn btn-warning btn-xs" title="Enviar las facturas a los Clientes"><i class="fa fa-send-o"></i> Enviar Correos</a>';
                             }
                         }];

@@ -92,7 +92,7 @@
                                     </ul>
                                 </li>
                                 
-                                <li><a href="/admin/cobroexpress"><i class="fa fa-copyright"></i>Cobro Express</a></li>
+                                {{-- <li><a href="/admin/cobroexpress"><i class="fa fa-copyright"></i>Cobro Express</a></li> --}}
                                 
                                 <li><a><i class="fa fa-line-chart"></i> Balance <span class="fa fa-chevron-down"></span></a>
                                   <ul class="nav child_menu">
