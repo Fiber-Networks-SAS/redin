@@ -1882,94 +1882,94 @@ class BillController extends Controller
     }
 
     public function generateBalanceXLS($response, $filters = [])
-    {
-        if (!is_null($response) && !empty($response)) {
+{
+    if (!is_null($response) && !empty($response)) {
 
-            try {
-                // Crear nombre descriptivo del archivo
-                $cliente = '';
-                if (!empty($filters) && isset($filters['user_id']) && !empty($filters['user_id'])) {
-                    $user = User::find($filters['user_id']);
-                    $cliente = $user ? '_' . str_replace(' ', '_', $user->firstname . '_' . $user->lastname) : '';
-                }
-
-                $periodo = '';
-                if (!empty($filters) && isset($filters['periodo']) && !empty($filters['periodo'])) {
-                    $periodo = '_periodo_' . str_replace('/', '_', $filters['periodo']);
-                }
-
-                $fecha = date('Y-m-d_H-i-s');
-                $filename = 'balance_general' . $cliente . $periodo . '_' . $fecha . '.xls';
-
-                $excelFilename = 'Balance de pagos ReDin';
-
-                // Asegurar que el directorio existe
-                $directory = public_path(config('constants.folder_balance_xls'));
-                if (!file_exists($directory)) {
-                    mkdir($directory, 0755, true);
-                }
-
-                \Excel::create($excelFilename, function ($excel) use ($response) {
-
-                    $excel->sheet('Balance', function ($sheet) use ($response) {
-
-                        $footer_facturas_total = 0;
-                        $footer_facturas_pagadas = 0;
-                        $footer_facturas_adeudadas = 0;
-                        $footer_importe_facturado = 0;
-                        $footer_importe_pagado = 0;
-
-                        // add headers
-                        $sheet->appendRow(array(
-                            'Período',
-                            'Total Facturas',
-                            'Facturas Pagadas',
-                            'Facturas Adeudadas',
-                            'Importe Facturado',
-                            'Importe Pagado'
-                        ));
-
-                        foreach ($response as $key => $periodo) {
-
-                            // totales
-                            $footer_facturas_total += (int)($periodo['facturas_total'] ?? 0);
-                            $footer_facturas_pagadas += (int)($periodo['facturas_pagadas'] ?? 0);
-                            $footer_facturas_adeudadas += (int)($periodo['facturas_adeudadas'] ?? 0);
-                            $footer_importe_facturado += (float)($periodo['importe_facturado'] ?? 0);
-                            $footer_importe_pagado += (float)($periodo['importe_pagado'] ?? 0);
-
-                            // Convertir todos los valores a string para evitar problemas con PHPExcel
-                            $sheet->appendRow(array(
-                                (string)($periodo['periodo'] ?? ''),
-                                (string)($periodo['facturas_total'] ?? '0'),
-                                (string)($periodo['facturas_pagadas'] ?? '0'),
-                                (string)($periodo['facturas_adeudadas'] ?? '0'),
-                                (string)number_format($periodo['importe_facturado'] ?? 0, 2),
-                                (string)number_format($periodo['importe_pagado'] ?? 0, 2)
-                            ));
-                        }
-
-                        // add total general - también convertir a string
-                        $sheet->appendRow(array(
-                            'Totales',
-                            (string)$footer_facturas_total,
-                            (string)$footer_facturas_pagadas,
-                            (string)$footer_facturas_adeudadas,
-                            (string)number_format($footer_importe_facturado, 2),
-                            (string)number_format($footer_importe_pagado, 2)
-                        ));
-                    });
-                })
-                    ->store('xls', public_path(config('constants.folder_balance_xls')));
-
-                return $filename;
-            } catch (\Exception $e) {
-                \Log::error('Error generando Excel: ' . $e->getMessage());
-                return null;
+        try {
+            // Crear nombre descriptivo del archivo
+            $cliente = '';
+            if (!empty($filters) && isset($filters['user_id']) && !empty($filters['user_id'])) {
+                $user = User::find($filters['user_id']);
+                $cliente = $user ? '_' . str_replace(' ', '_', $user->firstname . '_' . $user->lastname) : '';
             }
+
+            $periodo = '';
+            if (!empty($filters) && isset($filters['periodo']) && !empty($filters['periodo'])) {
+                $periodo = '_periodo_' . str_replace('/', '_', $filters['periodo']);
+            }
+
+            $fecha = date('Y-m-d_H-i-s');
+            $filename = 'balance_general' . $cliente . $periodo . '_' . $fecha;
+
+            // Asegurar que el directorio existe
+            $directory = public_path(config('constants.folder_balance_xls'));
+            if (!file_exists($directory)) {
+                mkdir($directory, 0755, true);
+            }
+
+            // Usar el mismo nombre para crear y retornar
+            \Excel::create($filename, function ($excel) use ($response) {
+
+                $excel->sheet('Balance', function ($sheet) use ($response) {
+
+                    $footer_facturas_total = 0;
+                    $footer_facturas_pagadas = 0;
+                    $footer_facturas_adeudadas = 0;
+                    $footer_importe_facturado = 0;
+                    $footer_importe_pagado = 0;
+
+                    // add headers
+                    $sheet->appendRow(array(
+                        'Período',
+                        'Total Facturas',
+                        'Facturas Pagadas',
+                        'Facturas Adeudadas',
+                        'Importe Facturado',
+                        'Importe Pagado'
+                    ));
+
+                    foreach ($response as $key => $periodo) {
+
+                        // totales
+                        $footer_facturas_total += (int)($periodo['facturas_total'] ?? 0);
+                        $footer_facturas_pagadas += (int)($periodo['facturas_pagadas'] ?? 0);
+                        $footer_facturas_adeudadas += (int)($periodo['facturas_adeudadas'] ?? 0);
+                        $footer_importe_facturado += (float)($periodo['importe_facturado'] ?? 0);
+                        $footer_importe_pagado += (float)($periodo['importe_pagado'] ?? 0);
+
+                        // Convertir todos los valores a string para evitar problemas con PHPExcel
+                        $sheet->appendRow(array(
+                            (string)($periodo['periodo'] ?? ''),
+                            (string)($periodo['facturas_total'] ?? '0'),
+                            (string)($periodo['facturas_pagadas'] ?? '0'),
+                            (string)($periodo['facturas_adeudadas'] ?? '0'),
+                            (string)number_format($periodo['importe_facturado'] ?? 0, 2),
+                            (string)number_format($periodo['importe_pagado'] ?? 0, 2)
+                        ));
+                    }
+
+                    // add total general - también convertir a string
+                    $sheet->appendRow(array(
+                        'Totales',
+                        (string)$footer_facturas_total,
+                        (string)$footer_facturas_pagadas,
+                        (string)$footer_facturas_adeudadas,
+                        (string)number_format($footer_importe_facturado, 2),
+                        (string)number_format($footer_importe_pagado, 2)
+                    ));
+                });
+            })
+            ->store('xls', public_path(config('constants.folder_balance_xls')));
+
+            // Retornar el nombre con extensión
+            return $filename . '.xls';
+        } catch (\Exception $e) {
+            \Log::error('Error generando Excel: ' . $e->getMessage());
+            return null;
         }
-        return null;
     }
+    return null;
+}
 
     public function getBalanceXLS(Request $request)
     {
