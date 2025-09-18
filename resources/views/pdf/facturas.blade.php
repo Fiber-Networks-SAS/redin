@@ -209,10 +209,13 @@
     <?php 
         $i = 1;
         
-        // Función simple para renderizar QR
-        function qr($qrData, $fallbackCode, $size = '80px') {
-            if ($qrData && $qrData->qr_code_base64) {
-                return '<img src="data:image/png;base64,'.$qrData->qr_code_base64.'" style="width:'.$size.';height:'.$size.';" alt="QR">';
+        // Función simple para renderizar QR (declarada una sola vez fuera del loop)
+        if (!function_exists('qr')) {
+            function qr($qrData, $fallbackCode, $size = '80px') {
+                if ($qrData && $qrData->qr_code_base64) {
+                    return '<img src="data:image/png;base64,'.$qrData->qr_code_base64.'" style="width:'.$size.';height:'.$size.';" alt="QR">';
+                }
+                return '';
             }
         }
     ?>
