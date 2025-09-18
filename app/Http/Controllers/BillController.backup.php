@@ -1642,7 +1642,7 @@ class BillController extends Controller
             
             try {
                 
-                $filename = 'balance';
+                $filename = 'Balance de pagos ReDin';
                 
                 $pdf = PDF::loadView('pdf.balance', ['response' => $response]);
                 $pdf->save(config('constants.folder_balance') . $filename . '.pdf');
@@ -1669,7 +1669,7 @@ class BillController extends Controller
 
         try {
 
-            $filename = 'balance';
+            $filename = 'Balance de pagos ReDin';
 
             $filename = config('constants.folder_balance') . $filename . ".pdf";
 

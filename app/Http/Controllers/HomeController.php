@@ -39,8 +39,11 @@ class HomeController extends Controller
         // landimng page under construction
         // return View::make('construction');
 
-        // Obtener servicios activos para mostrar en la landing
-        $servicios = \App\Servicio::where('status', 1)->orderBy('nombre')->get();
+        // Obtener servicios activos para mostrar en la landing (excluyendo Internet)
+        $servicios = \App\Servicio::where('status', 1)->where('tipo', '!=', 0)->orderBy('nombre')->get();
+        
+        // Obtener servicios de Internet (tipo 0) para mostrar en sección separada
+        $serviciosInternet = \App\Servicio::where('status', 1)->where('tipo', 0)->orderBy('nombre')->get();
         
         // Agregar iconos según el tipo de servicio
         foreach ($servicios as $servicio) {
@@ -48,8 +51,14 @@ class HomeController extends Controller
             $servicio->tipo_nombre = $this->getServiceTypeName($servicio->tipo);
         }
 
+        // Agregar iconos a los servicios de Internet
+        foreach ($serviciosInternet as $servicio) {
+            $servicio->icono = $this->getServiceIcon($servicio->tipo);
+            $servicio->tipo_nombre = $this->getServiceTypeName($servicio->tipo);
+        }
+
         // landimng page final
-        return View::make('landing')->with(['servicios' => $servicios]);
+        return View::make('landing')->with(['servicios' => $servicios, 'serviciosInternet' => $serviciosInternet]);
 
 
         // send Mail
@@ -245,7 +254,7 @@ class HomeController extends Controller
             case '1': // Teléfono
                 return 'fa-phone';
             case '2': // TV
-                return 'fa-tv';
+                return 'fa-television';
             default:
                 return 'fa-cog';
         }

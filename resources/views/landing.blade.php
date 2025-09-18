@@ -160,10 +160,10 @@
             </div>
             <div class="col-sm-4 wow fadeInDown" data-wow-duration="1000ms" data-wow-delay="600ms">
               <div class="service-icon">
-                <i class="fa fa-tv"></i>
+                <i class="fa fa-desktop"></i>
               </div>
               <div class="service-info">
-                <h3>Televisión</h3>
+                <h3>Television Full HD</h3>
                 <p>Entretenimiento digital con la mejor calidad</p>
               </div>
             </div>
@@ -215,53 +215,101 @@
       <div class="row">
         <div class="heading text-center col-sm-8 col-sm-offset-2 wow fadeInUp" data-wow-duration="1200ms" data-wow-delay="300ms">
           <h2>Internet</h2>
-          <p>Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua ut enim ad minim veniam</p>
+          <p>Descubre nuestros planes de Internet diseñados para satisfacer todas tus necesidades de conectividad. Velocidad confiable para tu hogar o empresa.</p>
         </div>
       </div>
       <div class="pricing-table">
         <div class="row">
-          <div class="col-sm-4">
-            <div class="single-table wow flipInY" data-wow-duration="1000ms" data-wow-delay="300ms">
-              <h3>Live</h3>
-              <div class="price">
-                $500<span>/Mes</span>                          
+          @if(isset($serviciosInternet) && $serviciosInternet->count() > 0)
+            @foreach($serviciosInternet as $index => $servicioInternet)
+              @php
+                // Determinar si es el plan destacado (el del medio si hay 3, o el segundo si hay más)
+                $totalServicios = $serviciosInternet->count();
+                $esPlanDestacado = false;
+                if ($totalServicios == 3 && $index == 1) {
+                  $esPlanDestacado = true;
+                } elseif ($totalServicios > 3 && $index == 1) {
+                  $esPlanDestacado = true;
+                }
+                
+                // Configurar animaciones escalonadas
+                $animationDelay = 300 + ($index * 200);
+                $colClass = $totalServicios <= 3 ? 'col-sm-4' : 'col-md-3 col-sm-6';
+              @endphp
+              
+              <div class="{{ $colClass }}">
+                <div class="single-table {{ $esPlanDestacado ? 'featured' : '' }} wow flipInY" data-wow-duration="1000ms" data-wow-delay="{{ $animationDelay }}ms">
+                  <h3>{{ $servicioInternet->nombre }}</h3>
+                  <div class="price">
+                    ${{ number_format($servicioInternet->abono_mensual, 0) }}<span>/Mes</span>
+                  </div>
+                  <ul>
+                    @if($servicioInternet->detalle)
+                      @foreach(explode("\n", $servicioInternet->detalle) as $linea)
+                        @if(trim($linea))
+                          <li>{{ trim($linea) }}</li>
+                        @endif
+                      @endforeach
+                    @else
+                      <li>Servicio de Internet</li>
+                      @if($servicioInternet->costo_instalacion)
+                        <li>Instalación: ${{ number_format($servicioInternet->costo_instalacion, 0) }}</li>
+                      @endif
+                    @endif
+                  </ul>
+                  <a href="#contact" class="btn btn-lg btn-primary">Consultar</a>
+                </div>
               </div>
-              <ul>
-                <li>6 Megas</li>
-                <li>1 Casilla de Correo</li>
-                <li>Contratación mínima 6 meses</li>
-              </ul>
-              <a href="#contact" class="btn btn-lg btn-primary">Consultar</a>
-            </div>
-          </div>
-          <div class="col-sm-4">
-            <div class="single-table featured wow flipInY" data-wow-duration="1000ms" data-wow-delay="500ms">
-              <h3>Premium</h3>
-              <div class="price">
-                $700<span>/Mes</span>                                
+              
+              @if($totalServicios > 3 && ($index + 1) % 4 == 0 && ($index + 1) < $totalServicios)
+                </div><div class="row">
+              @endif
+            @endforeach
+          @else
+            <!-- Planes por defecto si no hay servicios de Internet en la base de datos -->
+            <div class="col-sm-4">
+              <div class="single-table wow flipInY" data-wow-duration="1000ms" data-wow-delay="300ms">
+                <h3>Básico</h3>
+                <div class="price">
+                  $500<span>/Mes</span>                          
+                </div>
+                <ul>
+                  <li>6 Megas</li>
+                  <li>1 Casilla de Correo</li>
+                  <li>Contratación mínima 6 meses</li>
+                </ul>
+                <a href="#contact" class="btn btn-lg btn-primary">Consultar</a>
               </div>
-              <ul>
-                <li>10 Megas</li>
-                <li>5 Casillas de Correo</li>
-                <li>Contratación mínima 6 meses</li>
-              </ul>
-              <a href="#contact" class="btn btn-lg btn-primary">Consultar</a>
             </div>
-          </div>
-          <div class="col-sm-4">
-            <div class="single-table wow flipInY" data-wow-duration="1000ms" data-wow-delay="800ms">
-              <h3>Ultra</h3>
-              <div class="price">
-                $900<span>/Mes</span>                                
+            <div class="col-sm-4">
+              <div class="single-table featured wow flipInY" data-wow-duration="1000ms" data-wow-delay="500ms">
+                <h3>Premium</h3>
+                <div class="price">
+                  $700<span>/Mes</span>                                
+                </div>
+                <ul>
+                  <li>10 Megas</li>
+                  <li>5 Casillas de Correo</li>
+                  <li>Contratación mínima 6 meses</li>
+                </ul>
+                <a href="#contact" class="btn btn-lg btn-primary">Consultar</a>
               </div>
-              <ul>
-                <li>20 Megas</li>
-                <li>10 Casillas de Correo</li>
-                <li>Contratación mínima 6 meses</li>
-              </ul>
-              <a href="#contact" class="btn btn-lg btn-primary">Consultar</a>
             </div>
-          </div>
+            <div class="col-sm-4">
+              <div class="single-table wow flipInY" data-wow-duration="1000ms" data-wow-delay="800ms">
+                <h3>Ultra</h3>
+                <div class="price">
+                  $900<span>/Mes</span>                                
+                </div>
+                <ul>
+                  <li>20 Megas</li>
+                  <li>10 Casillas de Correo</li>
+                  <li>Contratación mínima 6 meses</li>
+                </ul>
+                <a href="#contact" class="btn btn-lg btn-primary">Consultar</a>
+              </div>
+            </div>
+          @endif
             <!-- <div class="col-sm-3">
             <div class="single-table wow flipInY" data-wow-duration="1000ms" data-wow-delay="1100ms">
               <h3>Professional</h3>

@@ -1843,6 +1843,13 @@ class BillController extends Controller
     public function balanceSearch(Request $request)
     {
         
+        // Guardar filtros en sesión para usar en descargas posteriores
+        $filters = [
+            'periodo' => $request->periodo,
+            'user_id' => $request->user_id
+        ];
+        session(['balance_filters' => $filters]);
+        
         // get balance
         $response = $this->getBalance($request);
 
@@ -1852,7 +1859,7 @@ class BillController extends Controller
             $this->generateBalancePDF($response);
 
             // generate XLS 
-            $this->generateBalanceXLS($response);
+            $this->generateBalanceXLS($response, $filters);
 
             // return balance
             return $response;
@@ -1929,7 +1936,7 @@ class BillController extends Controller
             
             try {
                 
-                $filename = 'balance';
+                $filename = 'Balance de pagos ReDin';
                 
                 $pdf = PDF::loadView('pdf.balance', ['response' => $response]);
                 $pdf->save(public_path(config('constants.folder_balance_pdf') . $filename . '.pdf'));
@@ -1956,7 +1963,7 @@ class BillController extends Controller
 
         try {
 
-            $filename = 'balance';
+            $filename = 'Balance de pagos ReDin';
 
             $filename = config('constants.folder_balance_pdf') . $filename . ".pdf";
 
@@ -1971,16 +1978,30 @@ class BillController extends Controller
 
     }
 
-    public function generateBalanceXLS($response)
+    public function generateBalanceXLS($response, $filters = [])
     {   
 
         if (!is_null($response) && !empty($response)) {
             
             try {
 
-                $filename = 'balance';
+                // Crear nombre descriptivo del archivo
+                $cliente = '';
+                if (!empty($filters) && isset($filters['user_id']) && !empty($filters['user_id'])) {
+                    $user = User::find($filters['user_id']);
+                    $cliente = $user ? '_' . str_replace(' ', '_', $user->firstname . '_' . $user->lastname) : '';
+                }
                 
-                \Excel::create($filename, function($excel) use($response) {
+                $periodo = '';
+                if (!empty($filters) && isset($filters['periodo']) && !empty($filters['periodo'])) {
+                    $periodo = '_periodo_' . str_replace('/', '_', $filters['periodo']);
+                }
+                
+                $fecha = date('Y-m-d_H-i-s');
+                $filename = 'balance_general' . $cliente . $periodo . '_' . $fecha . '.xls';
+                
+                $excelFilename = 'Balance de pagos ReDin';
+                \Excel::create($excelFilename, function($excel) use($response) {
 
                     $excel->sheet('Balance', function($sheet) use($response) {
 
@@ -2053,12 +2074,34 @@ class BillController extends Controller
     {
 
         try {
+            
+            // Usar filtros de la sesión si existen, sino generar balance general
+            $filters = session('balance_filters', []);
+            
+            if (!empty($filters)) {
+                // Crear request con filtros de sesión manteniendo el período seleccionado
+                $searchRequest = new Request([
+                    'periodo' => isset($filters['periodo']) ? $filters['periodo'] : '',
+                    'user_id' => isset($filters['user_id']) ? $filters['user_id'] : ''
+                ]);
+                $response = $this->getBalance($searchRequest);
+                
+                if (!is_null($response) && !empty($response)) {
+                    $filename = $this->generateBalanceXLS($response, $filters);
+                }
+            } else {
+                // Si no hay filtros en sesión, generar balance general de todos los períodos
+                $searchRequest = new Request(['periodo' => '', 'user_id' => '']);
+                $response = $this->getBalance($searchRequest);
+                
+                if (!is_null($response) && !empty($response)) {
+                    $filename = $this->generateBalanceXLS($response);
+                }
+            }
 
-            $filename = 'balance';
-
-            $filename = config('constants.folder_balance_xls') . $filename . ".xls";
-
-            return response()->download($filename);
+            $downloadFilename = isset($filename) ? $filename : 'balance_general_' . date('Y-m-d_H-i-s') . '.xls';
+            $filePath = config('constants.folder_balance_xls') . $downloadFilename;
+            return response()->download($filePath);
 
         } catch(\Exception $e) {
               
