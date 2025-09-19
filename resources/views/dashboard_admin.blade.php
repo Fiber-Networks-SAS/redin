@@ -33,7 +33,7 @@ vmax: 1/100th of the largest side
 	      <div class="animated flipInY col-lg-4 col-md-6 col-sm-6 col-xs-12">
 	        <div class="tile-stats">
 	          <!-- <div class="icon"><i class="fa fa-group"></i></div> -->
-	          <div class="count"><a href="/admin/balance">Balance</a></div>
+	          <div class="count"><a href="/admin/balance/general">Balance</a></div>
 	          <h3>Balance de la empresa</h3>
 	          <p>Gestión de Balance</p>
 	        </div>
