@@ -87,9 +87,6 @@
         
         <div style="margin-top: 30px;">
             <a href="{{ config('app.url') }}" class="btn">Volver al Inicio</a>
-            @auth
-                <a href="/dashboard" class="btn">Mi Panel</a>
-            @endauth
         </div>
     </div>
 

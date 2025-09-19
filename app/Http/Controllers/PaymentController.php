@@ -160,13 +160,13 @@ class PaymentController extends Controller
 
         // Validar rangos de IP de MercadoPago (opcional pero recomendado)
         $clientIp = $request->ip();
-        if (!$this->isValidMercadoPagoIP($clientIp)) {
-            Log::warning('Webhook desde IP no autorizada', ['ip' => $clientIp]);
-            // En desarrollo permitir localhost, en producción comentar esta línea
-            if (!in_array($clientIp, ['127.0.0.1', '::1']) && config('app.env') !== 'local') {
-                return false;
-            }
-        }
+        // if (!$this->isValidMercadoPagoIP($clientIp)) {
+        //     Log::warning('Webhook desde IP no autorizada', ['ip' => $clientIp]);
+        //     // En desarrollo permitir localhost, en producción comentar esta línea
+        //     if (!in_array($clientIp, ['127.0.0.1', '::1']) && config('app.env') !== 'local') {
+        //         return false;
+        //     }
+        // }
         
         return true;
     }

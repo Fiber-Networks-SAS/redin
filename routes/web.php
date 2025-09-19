@@ -296,9 +296,9 @@ Route::group(['prefix' => 'admin'], function() {
 });
 
 // Payment routes - MercadoPago callbacks
-Route::get('/payment/success', 'PaymentController@success')->name('payment.success');
-Route::get('/payment/failure', 'PaymentController@failure')->name('payment.failure'); 
-Route::get('/payment/pending', 'PaymentController@pending')->name('payment.pending');
+Route::get('/payment/success', 'PaymentController@paymentSuccess')->name('payment.success');
+Route::get('/payment/failure', 'PaymentController@paymentFailure')->name('payment.failure'); 
+Route::get('/payment/pending', 'PaymentController@paymentPending')->name('payment.pending');
 
 // Webhook for MercadoPago notifications
 Route::post('/webhooks/mercadopago', 'PaymentController@mercadoPagoWebhook')->name('payment.webhook');

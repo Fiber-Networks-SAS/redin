@@ -96,7 +96,7 @@ class BillController extends Controller
 
         $this->tipo = ['Internet', 'Telefonía', 'Televisión'];
         $this->drop = ['En Pilar', 'En Domicilio', 'Sin Drop'];
-        $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express',]; // 4 => 'Tarjeta de Crédito', 5 => 'Depósito'
+        $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express', 4 => 'Mercado Pago']; // 4 => 'Tarjeta de Crédito', 5 => 'Depósito'
         $this->meses = [
             '01' => 'ENERO',
             '02' => 'FEBRERO',
@@ -1020,6 +1020,17 @@ class BillController extends Controller
             // debug
             // return $facturas;
             // return $facturas = Factura::where('periodo', $request->periodo)->get();
+
+            // Envío automático de emails para todas las facturas creadas
+            foreach ($facturas as $factura) {
+                try {
+                    $this->sendEmailFactura($request, $factura);
+                    Log::info("Email enviado automáticamente para factura ID: {$factura->id}, cliente: {$factura->cliente->email}");
+                } catch (Exception $e) {
+                    // Log del error pero no interrumpir el proceso
+                    Log::error("Error enviando email automático para factura ID: {$factura->id}. Error: " . $e->getMessage());
+                }
+            }
 
             // genero los pdf's del periodo facturados
             $this->setFacturasPeriodoPDF($request->periodo); // SEGUIR SEGUIR SEGUIR SEGUIR (PASAR $request)
@@ -2502,6 +2513,17 @@ class BillController extends Controller
             // debug
             // return $facturas;
             // return $facturas = Factura::where('periodo', $request->periodo)->get();
+
+            // Envío automático de emails para todas las facturas creadas
+            foreach ($facturas as $factura) {
+                try {
+                    $this->sendEmailFactura($request, $factura);
+                    Log::info("Email enviado automáticamente para factura individual ID: {$factura->id}, cliente: {$factura->cliente->email}");
+                } catch (Exception $e) {
+                    // Log del error pero no interrumpir el proceso
+                    Log::error("Error enviando email automático para factura individual ID: {$factura->id}. Error: " . $e->getMessage());
+                }
+            }
 
             // genero los pdf's del periodo facturados
             $this->setFacturasPeriodoPDF($request->periodo); // SEGUIR SEGUIR SEGUIR SEGUIR (PASAR $request)
