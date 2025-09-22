@@ -161,7 +161,7 @@
                       </div>
                       <div class="col-md-3">
                         <div class="well text-center">
-                          <h4>Ahorro Total</h4>
+                          <h4>Impacto Total</h4>
                           <h3 class="text-danger">
                             ${{ number_format($bonificacion->calcularBonificacion($bonificacion->servicio->abono_mensual) * $bonificacion->periodos_bonificacion, 2) }}
                           </h3>
