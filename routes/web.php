@@ -204,6 +204,16 @@ Route::group(['prefix' => 'admin'], function() {
 		Route::get('/config/payments', 'ConfigPaymentsController@create');
 		Route::post('/config/payments', 'ConfigPaymentsController@store');
 
+		// bonificaciones de servicios
+		Route::get('/bonificaciones', 'BonificacionServicioController@index');
+		Route::get('/bonificaciones/create', 'BonificacionServicioController@create');
+		Route::post('/bonificaciones/create', 'BonificacionServicioController@store');
+		Route::get('/bonificaciones/view/{id}', 'BonificacionServicioController@show');
+		Route::get('/bonificaciones/edit/{id}', 'BonificacionServicioController@edit');
+		Route::post('/bonificaciones/edit/{id}', 'BonificacionServicioController@update');
+		Route::post('/bonificaciones/delete/{id}', 'BonificacionServicioController@destroy');
+		Route::post('/bonificaciones/toggle/{id}', 'BonificacionServicioController@toggleActive');
+
 		// periodos
 		Route::get('/period', 'BillController@index');
 		Route::get('/period/list', 'BillController@getList'); 								// request for fill Table (via Ajax)

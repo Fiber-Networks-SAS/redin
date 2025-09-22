@@ -23,6 +23,7 @@ use iio\libmergepdf\Merger;
 
 use App\User;
 use App\Role;
+use App\BonificacionServicio;
 use App\Pais;
 use App\Provincia;
 use App\Localidad;
@@ -932,10 +933,35 @@ class BillController extends Controller
             // Genero las Facturas
             foreach ($items as $item) {
 
-                // calculo de importes
+                // calculo de importes con bonificaciones aplicadas
                 $subtotal = 0;
+                $bonificacion_total = 0;
+                $fecha_facturacion = Carbon::createFromFormat('d/m/Y', $request->fecha_emision);
+                
                 foreach ($item['servicios_activos'] as $servicio) {
-                    $subtotal +=  $servicio->costo_proporcional_importe + $servicio->costo_abono_pagar + $servicio->costo_instalacion_importe_pagar;
+                    $importe_servicio = $servicio->costo_proporcional_importe + $servicio->costo_abono_pagar + $servicio->costo_instalacion_importe_pagar;
+                    
+                    // Verificar si existe bonificación vigente para este servicio
+                    $bonificacion = BonificacionServicio::where('service_id', $servicio->servicio_id)
+                        ->where('activo', true)
+                        ->whereRaw('fecha_inicio <= ?', [$fecha_facturacion])
+                        ->whereRaw('DATE_ADD(fecha_inicio, INTERVAL periodos_bonificacion MONTH) > ?', [$fecha_facturacion])
+                        ->first();
+                    
+                    if ($bonificacion) {
+                        $descuento_servicio = $bonificacion->calcularBonificacion($importe_servicio);
+                        $bonificacion_total += $descuento_servicio;
+                        // Guardar información de bonificación en el servicio para el detalle
+                        $servicio->bonificacion_aplicada = $descuento_servicio;
+                        $servicio->bonificacion_id = $bonificacion->id;
+                        $servicio->bonificacion_porcentaje = $bonificacion->porcentaje_bonificacion;
+                    } else {
+                        $servicio->bonificacion_aplicada = 0;
+                        $servicio->bonificacion_id = null;
+                        $servicio->bonificacion_porcentaje = 0;
+                    }
+                    
+                    $subtotal += $importe_servicio;
                 }
 
                 // Cabecera
@@ -947,8 +973,8 @@ class BillController extends Controller
                 $factura->periodo               = $request->periodo;
                 $factura->fecha_emision         = Carbon::createFromFormat('d/m/Y', $request->fecha_emision);
                 $factura->importe_subtotal      = $this->floatvalue(number_format($subtotal, 2));
-                $factura->importe_bonificacion  = $this->floatvalue(number_format(0, 2));
-                $factura->importe_total         = $this->floatvalue(number_format($subtotal, 2));
+                $factura->importe_bonificacion  = $this->floatvalue(number_format($bonificacion_total, 2));
+                $factura->importe_total         = $this->floatvalue(number_format($subtotal - $bonificacion_total, 2));
 
                 $mes_periodo = substr($request->periodo, 0, 2);
                 $ano_periodo = substr($request->periodo, 3, 4);
@@ -2425,10 +2451,35 @@ class BillController extends Controller
             // Genero las Facturas
             foreach ($items as $item) {
 
-                // calculo de importes
+                // calculo de importes con bonificaciones aplicadas
                 $subtotal = 0;
+                $bonificacion_total = 0;
+                $fecha_facturacion = Carbon::createFromFormat('d/m/Y', $request->fecha_emision);
+                
                 foreach ($item['servicios_activos'] as $servicio) {
-                    $subtotal +=  $servicio->costo_proporcional_importe + $servicio->costo_abono_pagar + $servicio->costo_instalacion_importe_pagar;
+                    $importe_servicio = $servicio->costo_proporcional_importe + $servicio->costo_abono_pagar + $servicio->costo_instalacion_importe_pagar;
+                    
+                    // Verificar si existe bonificación vigente para este servicio
+                    $bonificacion = BonificacionServicio::where('service_id', $servicio->servicio_id)
+                        ->where('activo', true)
+                        ->whereRaw('fecha_inicio <= ?', [$fecha_facturacion])
+                        ->whereRaw('DATE_ADD(fecha_inicio, INTERVAL periodos_bonificacion MONTH) > ?', [$fecha_facturacion])
+                        ->first();
+                    
+                    if ($bonificacion) {
+                        $descuento_servicio = $bonificacion->calcularBonificacion($importe_servicio);
+                        $bonificacion_total += $descuento_servicio;
+                        // Guardar información de bonificación en el servicio para el detalle
+                        $servicio->bonificacion_aplicada = $descuento_servicio;
+                        $servicio->bonificacion_id = $bonificacion->id;
+                        $servicio->bonificacion_porcentaje = $bonificacion->porcentaje_bonificacion;
+                    } else {
+                        $servicio->bonificacion_aplicada = 0;
+                        $servicio->bonificacion_id = null;
+                        $servicio->bonificacion_porcentaje = 0;
+                    }
+                    
+                    $subtotal += $importe_servicio;
                 }
 
                 // Cabecera
@@ -2440,8 +2491,8 @@ class BillController extends Controller
                 $factura->periodo               = $request->periodo;
                 $factura->fecha_emision         = Carbon::createFromFormat('d/m/Y', $request->fecha_emision);
                 $factura->importe_subtotal      = $this->floatvalue(number_format($subtotal, 2));
-                $factura->importe_bonificacion  = $this->floatvalue(number_format(0, 2));
-                $factura->importe_total         = $this->floatvalue(number_format($subtotal, 2));
+                $factura->importe_bonificacion  = $this->floatvalue(number_format($bonificacion_total, 2));
+                $factura->importe_total         = $this->floatvalue(number_format($subtotal - $bonificacion_total, 2));
 
                 $mes_periodo = substr($request->periodo, 0, 2);
                 $ano_periodo = substr($request->periodo, 3, 4);
@@ -2667,5 +2718,65 @@ class BillController extends Controller
         // get cuota object
         $cuota = Cuota::find($id);
         return $cuota->numero;
+    }
+
+    /**
+     * Aplicar bonificaciones a una factura existente
+     * 
+     * @param Factura $factura
+     * @param Carbon $fecha_facturacion
+     * @return array
+     */
+    private function aplicarBonificacionesFactura($factura, $fecha_facturacion = null)
+    {
+        if (!$fecha_facturacion) {
+            $fecha_facturacion = Carbon::now();
+        }
+
+        $bonificacion_total = 0;
+        $detalles_bonificados = [];
+
+        // Obtener los detalles de la factura
+        $detalles = $factura->detalle;
+
+        foreach ($detalles as $detalle) {
+            // Buscar bonificación vigente para este servicio
+            $bonificacion = BonificacionServicio::where('service_id', $detalle->servicio_id)
+                ->vigentes($fecha_facturacion)
+                ->first();
+
+            if ($bonificacion) {
+                // Calcular el importe del servicio
+                $importe_servicio = 0;
+                
+                if ($detalle->abono_proporcional) {
+                    $importe_servicio += $detalle->abono_proporcional;
+                } else {
+                    $importe_servicio += $detalle->abono_mensual;
+                }
+                
+                if ($detalle->costo_instalacion) {
+                    $importe_servicio += $detalle->costo_instalacion;
+                }
+
+                // Aplicar bonificación
+                $descuento = $bonificacion->calcularBonificacion($importe_servicio);
+                $bonificacion_total += $descuento;
+
+                $detalles_bonificados[] = [
+                    'detalle_id' => $detalle->id,
+                    'servicio_id' => $detalle->servicio_id,
+                    'bonificacion_id' => $bonificacion->id,
+                    'importe_original' => $importe_servicio,
+                    'descuento_aplicado' => $descuento,
+                    'porcentaje' => $bonificacion->porcentaje_bonificacion
+                ];
+            }
+        }
+
+        return [
+            'bonificacion_total' => $bonificacion_total,
+            'detalles' => $detalles_bonificados
+        ];
     }
 }

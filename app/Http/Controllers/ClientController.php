@@ -92,7 +92,7 @@ class ClientController extends Controller
 
         $this->tipo = ['Internet', 'Telefonía', 'Televisión'];
         $this->drop = ['En Pilar', 'En Domicilio', 'Sin Drop'];
-        $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express',]; // 4 => 'Tarjeta de Crédito', 5 => 'Depósito'
+        $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express', 4 => 'Mercado Pago']; // 4 => 'Tarjeta de Crédito', 5 => 'Depósito'
 
     }
 

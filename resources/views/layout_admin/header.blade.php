@@ -107,6 +107,7 @@
                                     <li><a href="/admin/config/interests">Intereses</a></li>
                                     <li><a href="/admin/config/dues">Cuotas</a></li>
                                     <li><a href="/admin/config/payments">Plan de Pagos</a></li>
+                                    <li><a href="/admin/bonificaciones">Bonificaciones</a></li>
                                   </ul>
                                 </li>
                                 
