@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Crypt;
 use View;
 use Validator;
 use DateTime;
+use Illuminate\Support\Facades\DB;
 use Intervention\Image\ImageManagerStatic as Image;
 use Yajra\Datatables\Datatables;
 use iio\libmergepdf\Merger;
@@ -937,17 +938,17 @@ class BillController extends Controller
                 $subtotal = 0;
                 $bonificacion_total = 0;
                 $fecha_facturacion = Carbon::createFromFormat('d/m/Y', $request->fecha_emision);
-                
+
                 foreach ($item['servicios_activos'] as $servicio) {
                     $importe_servicio = $servicio->costo_proporcional_importe + $servicio->costo_abono_pagar + $servicio->costo_instalacion_importe_pagar;
-                    
+
                     // Verificar si existe bonificación vigente para este servicio
                     $bonificacion = BonificacionServicio::where('service_id', $servicio->servicio_id)
                         ->where('activo', true)
                         ->whereRaw('fecha_inicio <= ?', [$fecha_facturacion])
                         ->whereRaw('DATE_ADD(fecha_inicio, INTERVAL periodos_bonificacion MONTH) > ?', [$fecha_facturacion])
                         ->first();
-                    
+
                     if ($bonificacion) {
                         $descuento_servicio = $bonificacion->calcularBonificacion($importe_servicio);
                         $bonificacion_total += $descuento_servicio;
@@ -960,7 +961,7 @@ class BillController extends Controller
                         $servicio->bonificacion_id = null;
                         $servicio->bonificacion_porcentaje = 0;
                     }
-                    
+
                     $subtotal += $importe_servicio;
                 }
 
@@ -1058,8 +1059,8 @@ class BillController extends Controller
                 }
             }
 
-            // genero los pdf's del periodo facturados
-            $this->setFacturasPeriodoPDF($request->periodo); // SEGUIR SEGUIR SEGUIR SEGUIR (PASAR $request)
+            // genero los pdf's: sólo del periodo y factura creada (paso el id para evitar regenerar todo)
+            $this->setFacturasPeriodoPDF($request->periodo, $factura->id); // antes regeneraba todo el periodo
             $filename = $this->getFacturasPeriodoPDFPath($request);
 
             return redirect('/admin/period')->with(['status' => 'success', 'message' => 'El período ' . $request->periodo . ' fué facturado.', 'icon' => 'fa-smile-o', 'filename' => $filename]);
@@ -1178,18 +1179,22 @@ class BillController extends Controller
     public function getNroFactura($talonario_id)
     {
 
-        // busco si existen facturas hechas con el talonario indicado
-        $nro_factura = Factura::where('talonario_id', $talonario_id)->max('nro_factura');
+        // Usar una transacción con lockForUpdate para evitar condiciones de carrera
+        return DB::transaction(function () use ($talonario_id) {
+            // obtengo el máximo nro_factura con bloqueo para esta transacción
+            $nro_factura = DB::table('facturas')
+                ->where('talonario_id', $talonario_id)
+                ->lockForUpdate()
+                ->max('nro_factura');
 
-        // si no existen facturas busco el nro inicial del talonario
-        if (!$nro_factura) {
-            $nro_factura = Talonario::find($talonario_id)->nro_inicial;
-        } else {
+            // si no existen facturas busco el nro inicial del talonario
+            if (!$nro_factura) {
+                $talonario = Talonario::find($talonario_id);
+                return $talonario ? $talonario->nro_inicial : 1;
+            }
 
-            $nro_factura++;
-        }
-
-        return $nro_factura;
+            return $nro_factura + 1;
+        });
     }
 
     // public function getNroCuotasInstalacion($user_id, $servicio_id, $periodo, $alta_servicio, $plan_pago)
@@ -1477,7 +1482,6 @@ class BillController extends Controller
     // merge PDF facturas
     public function setPeriodoPDF($periodo, $facturas)
     {
-
         foreach ($facturas as $factura) {
             $filenames[] = $factura->filePath;
         }
@@ -1922,94 +1926,94 @@ class BillController extends Controller
     }
 
     public function generateBalanceXLS($response, $filters = [])
-{
-    if (!is_null($response) && !empty($response)) {
+    {
+        if (!is_null($response) && !empty($response)) {
 
-        try {
-            // Crear nombre descriptivo del archivo
-            $cliente = '';
-            if (!empty($filters) && isset($filters['user_id']) && !empty($filters['user_id'])) {
-                $user = User::find($filters['user_id']);
-                $cliente = $user ? '_' . str_replace(' ', '_', $user->firstname . '_' . $user->lastname) : '';
-            }
+            try {
+                // Crear nombre descriptivo del archivo
+                $cliente = '';
+                if (!empty($filters) && isset($filters['user_id']) && !empty($filters['user_id'])) {
+                    $user = User::find($filters['user_id']);
+                    $cliente = $user ? '_' . str_replace(' ', '_', $user->firstname . '_' . $user->lastname) : '';
+                }
 
-            $periodo = '';
-            if (!empty($filters) && isset($filters['periodo']) && !empty($filters['periodo'])) {
-                $periodo = '_periodo_' . str_replace('/', '_', $filters['periodo']);
-            }
+                $periodo = '';
+                if (!empty($filters) && isset($filters['periodo']) && !empty($filters['periodo'])) {
+                    $periodo = '_periodo_' . str_replace('/', '_', $filters['periodo']);
+                }
 
-            $fecha = date('Y-m-d_H-i-s');
-            $filename = 'balance_general' . $cliente . $periodo . '_' . $fecha;
+                $fecha = date('Y-m-d_H-i-s');
+                $filename = 'balance_general' . $cliente . $periodo . '_' . $fecha;
 
-            // Asegurar que el directorio existe
-            $directory = public_path(config('constants.folder_balance_xls'));
-            if (!file_exists($directory)) {
-                mkdir($directory, 0755, true);
-            }
+                // Asegurar que el directorio existe
+                $directory = public_path(config('constants.folder_balance_xls'));
+                if (!file_exists($directory)) {
+                    mkdir($directory, 0755, true);
+                }
 
-            // Usar el mismo nombre para crear y retornar
-            \Excel::create($filename, function ($excel) use ($response) {
+                // Usar el mismo nombre para crear y retornar
+                \Excel::create($filename, function ($excel) use ($response) {
 
-                $excel->sheet('Balance', function ($sheet) use ($response) {
+                    $excel->sheet('Balance', function ($sheet) use ($response) {
 
-                    $footer_facturas_total = 0;
-                    $footer_facturas_pagadas = 0;
-                    $footer_facturas_adeudadas = 0;
-                    $footer_importe_facturado = 0;
-                    $footer_importe_pagado = 0;
+                        $footer_facturas_total = 0;
+                        $footer_facturas_pagadas = 0;
+                        $footer_facturas_adeudadas = 0;
+                        $footer_importe_facturado = 0;
+                        $footer_importe_pagado = 0;
 
-                    // add headers
-                    $sheet->appendRow(array(
-                        'Período',
-                        'Total Facturas',
-                        'Facturas Pagadas',
-                        'Facturas Adeudadas',
-                        'Importe Facturado',
-                        'Importe Pagado'
-                    ));
-
-                    foreach ($response as $key => $periodo) {
-
-                        // totales
-                        $footer_facturas_total += (int)($periodo['facturas_total'] ?? 0);
-                        $footer_facturas_pagadas += (int)($periodo['facturas_pagadas'] ?? 0);
-                        $footer_facturas_adeudadas += (int)($periodo['facturas_adeudadas'] ?? 0);
-                        $footer_importe_facturado += (float)($periodo['importe_facturado'] ?? 0);
-                        $footer_importe_pagado += (float)($periodo['importe_pagado'] ?? 0);
-
-                        // Convertir todos los valores a string para evitar problemas con PHPExcel
+                        // add headers
                         $sheet->appendRow(array(
-                            (string)($periodo['periodo'] ?? ''),
-                            (string)($periodo['facturas_total'] ?? '0'),
-                            (string)($periodo['facturas_pagadas'] ?? '0'),
-                            (string)($periodo['facturas_adeudadas'] ?? '0'),
-                            (string)number_format($periodo['importe_facturado'] ?? 0, 2),
-                            (string)number_format($periodo['importe_pagado'] ?? 0, 2)
+                            'Período',
+                            'Total Facturas',
+                            'Facturas Pagadas',
+                            'Facturas Adeudadas',
+                            'Importe Facturado',
+                            'Importe Pagado'
                         ));
-                    }
 
-                    // add total general - también convertir a string
-                    $sheet->appendRow(array(
-                        'Totales',
-                        (string)$footer_facturas_total,
-                        (string)$footer_facturas_pagadas,
-                        (string)$footer_facturas_adeudadas,
-                        (string)number_format($footer_importe_facturado, 2),
-                        (string)number_format($footer_importe_pagado, 2)
-                    ));
-                });
-            })
-            ->store('xls', public_path(config('constants.folder_balance_xls')));
+                        foreach ($response as $key => $periodo) {
 
-            // Retornar el nombre con extensión
-            return $filename . '.xls';
-        } catch (\Exception $e) {
-            \Log::error('Error generando Excel: ' . $e->getMessage());
-            return null;
+                            // totales
+                            $footer_facturas_total += (int)($periodo['facturas_total'] ?? 0);
+                            $footer_facturas_pagadas += (int)($periodo['facturas_pagadas'] ?? 0);
+                            $footer_facturas_adeudadas += (int)($periodo['facturas_adeudadas'] ?? 0);
+                            $footer_importe_facturado += (float)($periodo['importe_facturado'] ?? 0);
+                            $footer_importe_pagado += (float)($periodo['importe_pagado'] ?? 0);
+
+                            // Convertir todos los valores a string para evitar problemas con PHPExcel
+                            $sheet->appendRow(array(
+                                (string)($periodo['periodo'] ?? ''),
+                                (string)($periodo['facturas_total'] ?? '0'),
+                                (string)($periodo['facturas_pagadas'] ?? '0'),
+                                (string)($periodo['facturas_adeudadas'] ?? '0'),
+                                (string)number_format($periodo['importe_facturado'] ?? 0, 2),
+                                (string)number_format($periodo['importe_pagado'] ?? 0, 2)
+                            ));
+                        }
+
+                        // add total general - también convertir a string
+                        $sheet->appendRow(array(
+                            'Totales',
+                            (string)$footer_facturas_total,
+                            (string)$footer_facturas_pagadas,
+                            (string)$footer_facturas_adeudadas,
+                            (string)number_format($footer_importe_facturado, 2),
+                            (string)number_format($footer_importe_pagado, 2)
+                        ));
+                    });
+                })
+                    ->store('xls', public_path(config('constants.folder_balance_xls')));
+
+                // Retornar el nombre con extensión
+                return $filename . '.xls';
+            } catch (\Exception $e) {
+                \Log::error('Error generando Excel: ' . $e->getMessage());
+                return null;
+            }
         }
+        return null;
     }
-    return null;
-}
 
     public function getBalanceXLS(Request $request)
     {
@@ -2315,19 +2319,15 @@ class BillController extends Controller
     public function billSingle()
     {
 
-        // obtengo el ultimo periodo
-        $factura = Factura::orderBy('id', 'desc')->first();
-        
-        // Si no existe factura o el periodo está vacío, uso el periodo actual
-        $periodo = ($factura && $factura->periodo) ? $factura->periodo : date('m/Y');
+        // Obtengo todos los periodos facturados (sin duplicados) ordenados desc
+        $periodos = Factura::orderBy('periodo', 'desc')->pluck('periodo')->unique()->values();
 
-        return View::make('bill_single.create')->with(['periodo' => $periodo]);
+        return View::make('bill_single.create')->with(['periodo' => $periodos]);
     }
 
     // facturo el periodo
     public function billSingleStore(Request $request)
     {
-
         // ver
         // https://laravel.io/forum/09-16-2014-validator-greater-than-other-field
 
@@ -2349,10 +2349,17 @@ class BillController extends Controller
 
 
         // For work edit file : \vendor\zizaco\entrust\src\Entrust\Traits\EntrustRoleTrait.php #52
-        $users = User::where('id', $request->user_id)->get();
+        // Obtener el usuario seleccionado (aseguramos procesar solo uno)
+        $user = User::find($request->user_id);
+        if (!$user) {
+            return back()->withInput()->with(['status' => 'danger', 'message' => 'Cliente no encontrado.', 'icon' => 'fa-frown-o']);
+        }
 
-        // Obtengo los servicios activos de los clientes activos
+        $users = collect([$user]);
+        // Obtengo los servicios activos del cliente
         if (count($users)) {
+            // inicializo el array de items para evitar que contenga datos previos
+            $items = [];
 
             // obtengo la conf. de intereses 
             $interes = Interes::find(1);
@@ -2372,7 +2379,6 @@ class BillController extends Controller
             // }
 
             // return $users;
-
 
             foreach ($users as $user) {
 
@@ -2438,15 +2444,13 @@ class BillController extends Controller
                     }
                 }
             }
-
+            // if (count($items['cliente']) == 1) {
+            //     $this->singleBillPDF($items);
+            // }
             // ---------------------------------------------------------------------------------------------------------------           
             // return $items;
-
             // ordeno los items por el atributo "domicilio"
             usort($items, array($this, "cmp_obj"));
-
-            // debug
-            // return $items;
 
             // Genero las Facturas
             foreach ($items as $item) {
@@ -2455,17 +2459,17 @@ class BillController extends Controller
                 $subtotal = 0;
                 $bonificacion_total = 0;
                 $fecha_facturacion = Carbon::createFromFormat('d/m/Y', $request->fecha_emision);
-                
+
                 foreach ($item['servicios_activos'] as $servicio) {
                     $importe_servicio = $servicio->costo_proporcional_importe + $servicio->costo_abono_pagar + $servicio->costo_instalacion_importe_pagar;
-                    
+
                     // Verificar si existe bonificación vigente para este servicio
                     $bonificacion = BonificacionServicio::where('service_id', $servicio->servicio_id)
                         ->where('activo', true)
                         ->whereRaw('fecha_inicio <= ?', [$fecha_facturacion])
                         ->whereRaw('DATE_ADD(fecha_inicio, INTERVAL periodos_bonificacion MONTH) > ?', [$fecha_facturacion])
                         ->first();
-                    
+
                     if ($bonificacion) {
                         $descuento_servicio = $bonificacion->calcularBonificacion($importe_servicio);
                         $bonificacion_total += $descuento_servicio;
@@ -2478,7 +2482,7 @@ class BillController extends Controller
                         $servicio->bonificacion_id = null;
                         $servicio->bonificacion_porcentaje = 0;
                     }
-                    
+
                     $subtotal += $importe_servicio;
                 }
 
@@ -2564,7 +2568,7 @@ class BillController extends Controller
             // debug
             // return $facturas;
             // return $facturas = Factura::where('periodo', $request->periodo)->get();
-
+            $this->singleBillPDF($factura);
             // Envío automático de emails para todas las facturas creadas
             foreach ($facturas as $factura) {
                 try {
@@ -2577,11 +2581,8 @@ class BillController extends Controller
             }
 
             // genero los pdf's del periodo facturados
-            $this->setFacturasPeriodoPDF($request->periodo); // SEGUIR SEGUIR SEGUIR SEGUIR (PASAR $request)
-            // $filename = $this->getFacturasPeriodoPDFPath($request);
-
+            //$this->setFacturasPeriodoPDF($request->periodo); // SEGUIR SEGUIR SEGUIR SEGUIR (PASAR $request)
             $filename = $this->getFacturaPDFPath($request, $factura);
-
             // return redirect('/admin/period')->with(['status' => 'success', 'message' => 'El período '.$request->periodo.' fué facturado.', 'icon' => 'fa-smile-o', 'filename' => $filename]);
 
             return redirect('/admin/bills/single')->with(['status' => 'success', 'message' => 'Se ha generado la factura ' . $factura->talonario->letra . ' ' . $factura->talonario->nro_punto_vta . ' - ' . $factura->nro_factura . '.', 'icon' => 'fa-smile-o', 'filename' => $filename, 'factura_id' => $factura->id]);
@@ -2592,7 +2593,55 @@ class BillController extends Controller
     }
 
 
+    private function singleBillPDF($factura)
+    {
+        // formateo los campos
+        $factura->talonario;
+        $factura->talonario->nro_punto_vta  = $this->zerofill($factura->talonario->nro_punto_vta, 4);
+        $factura->nro_factura               = $this->zerofill($factura->nro_factura);
+        $factura->nro_cliente               = $this->zerofill($factura->nro_cliente, 5);
 
+        $factura->fecha_emision     = Carbon::parse($factura->fecha_emision)->format('d/m/Y');
+        $factura->primer_vto_fecha  = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
+        $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
+        $factura->tercer_vto_fecha  = Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y');
+
+        $factura->importe_subtotal      = number_format($factura->importe_subtotal, 2);
+        $factura->importe_bonificacion  = number_format($factura->importe_bonificacion, 2);
+        $factura->importe_total         = number_format($factura->importe_total, 2);
+        $factura->segundo_vto_importe   = number_format($factura->segundo_vto_importe, 2);
+        $factura->tercer_vto_importe    = number_format($factura->tercer_vto_importe, 2);
+
+        // genero el path del pdf de la factura
+        $factura->filename = $factura->talonario->nro_punto_vta . '-' . $factura->nro_factura;
+        $factura->filePath = public_path(config('constants.folder_facturas') . 'factura-' . $factura->filename . '.pdf');
+
+        // datos del cliente
+        $factura->cliente;
+
+        // datos del detalle
+        $detalles =  $factura->detalle;
+        foreach ($detalles as $detalle) {
+            $detalle->servicio;
+        }
+
+
+        // Primero generar códigos QR de MercadoPago para cada vencimiento
+        $this->generatePaymentQRCodes($factura);
+
+        // Crear PDF (los códigos QR se obtienen desde la vista usando el método del modelo)
+        $pdf = PDF::loadView('pdf.facturas', ['facturas' => [$factura]]);
+        $pdf->save($factura->filePath);
+
+        //$this->setPeriodoPDF($factura->periodo, collect($factura));
+
+        // genero los PDF's de las facturas del periodo
+        // $filename = str_replace('/', '-', $periodo);
+        // $pdf = PDF::loadView('pdf.facturas', ['facturas' => $facturas]);
+        // $pdf->save(config('constants.folder_periodos') . 'periodo-'.$filename.'.pdf');
+
+        // return $facturas;
+    }
 
     //----------------------------------------------------------------------------------------------//
 
@@ -2748,13 +2797,13 @@ class BillController extends Controller
             if ($bonificacion) {
                 // Calcular el importe del servicio
                 $importe_servicio = 0;
-                
+
                 if ($detalle->abono_proporcional) {
                     $importe_servicio += $detalle->abono_proporcional;
                 } else {
                     $importe_servicio += $detalle->abono_mensual;
                 }
-                
+
                 if ($detalle->costo_instalacion) {
                     $importe_servicio += $detalle->costo_instalacion;
                 }

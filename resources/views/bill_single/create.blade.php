@@ -47,7 +47,12 @@
                   <div class="col-md-6 col-sm-6 col-xs-12">
                     
                     @if(is_array($periodo) || $periodo instanceof Countable)
-                      <input type="text" id="periodo" name="periodo" class="form-control col-md-7 col-xs-12 @if ($errors->has('periodo')) parsley-error @endif" value="{{ old('periodo') ? old('periodo') : $periodo }}"  required readonly>
+                        <select name="periodo" id="periodo" class="form-control col-md-7 col-xs-12 @if ($errors->has('periodo')) parsley-error @endif" required>
+                            @foreach($periodo as $p)
+                                <option value="{{ $p }}" @if (old('periodo') == $p) selected @endif>{{ $p }}</option>
+                            @endforeach
+                        </select>
+                    {{-- <input type="text" id="periodo" name="periodo" class="form-control col-md-7 col-xs-12 @if ($errors->has('periodo')) parsley-error @endif" value="{{ old('periodo') ? old('periodo') : $periodo }}"  required readonly> --}}
                     @else
                         <div class="alert alert-danger">
                             No existen Periodos Facturados. Los puede crear desde <a href="/admin/period/create" class="alert-link">Aqu&iacute;</a>.
