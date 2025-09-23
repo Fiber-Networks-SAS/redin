@@ -22,7 +22,8 @@
         "iio/libmergepdf": "3.1",
         "maatwebsite/excel": "~2.1.0",
         "mercadopago/dx-php": "^2.4",
-        "endroid/qr-code": "^3.4"      
+        "endroid/qr-code": "^3.4",
+        "afipsdk/afip.php": "*"      
     },
     "require-dev": {
         "fzaninotto/faker": "~1.4",

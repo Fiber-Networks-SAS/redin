@@ -280,7 +280,8 @@
             <table>
                     <thead>
                         <tr>
-                            <th style="width: 90%;" class="left">Servicio</th>
+                            <th style="width: 80%;" class="left">Servicio</th>
+                            <th style="width: 10%;" class="right">IVA</th>
                             <th style="width: 10%;" class="right">Importe</th>
                         </tr>
                     </thead>
@@ -293,9 +294,10 @@
                                 
                                     <?php if ($detalle->instalacion_cuota != null && $detalle->instalacion_cuota <= $detalle->instalacion_plan_pago): ?>
                                             <tr>
-                                                <td class="detalle_row" colspan="2">                                            
+                                                <td class="detalle_row" colspan="3">                                            
                                                     <tr>
                                                         <td class="left">Convenio de Pago - Servicio {{$detalle->servicio->nombre}}  (Cuota {{$detalle->instalacion_cuota.'/'.$detalle->instalacion_plan_pago}})</td>   
+                                                        <td class="right">{{number_format($detalle->costo_instalacion * 0.21, 2)}}</td>  
                                                         <td class="right">{{number_format($detalle->costo_instalacion, 2)}}</td>  
                                                     </tr>
                                                 </td> 
@@ -305,7 +307,7 @@
                                 <?php else: ?>
 
                                     <tr>
-                                        <td class="detalle_row" colspan="2">
+                                        <td class="detalle_row" colspan="3">
                                             
                                             <?php if(!is_null($detalle->abono_proporcional)){
 
@@ -321,12 +323,14 @@
 
                                             <tr>
                                                 <td class="left">{{$fila_detalle}}</td>   
+                                                <td class="right">{{number_format($detalle->importe_iva, 2)}}</td>   
                                                 <td class="right">{{number_format($fila_importe, 2)}}</td>   
                                             </tr>
 
                                             <?php if ($detalle->instalacion_cuota != null && $detalle->instalacion_cuota <= $detalle->instalacion_plan_pago): ?>
                                                     <tr>
-                                                        <td class="left"> *Costo de Instalación (Cuota {{$detalle->instalacion_cuota.'/'.$detalle->instalacion_plan_pago}})</td>   
+                                                        <td class="left"> *Costo de Instalación (Cuota {{$detalle->instalacion_cuota.'/'.$detalle->instalacion_plan_pago}})</td>
+                                                        <td class="right">{{number_format($detalle->costo_instalacion * 0.21, 2)}}</td>
                                                         <td class="right">{{number_format($detalle->costo_instalacion, 2)}}</td>  
                                                     </tr>
                                             <?php endif; ?>  
@@ -342,15 +346,18 @@
                     
                     <tfoot>
                         <tr>
-                            <th style="width: 90%;" class="left">Subtotal</th>
+                            <th style="width: 80%;" class="left">Subtotal</th>
+                            <th style="width: 10%;" class="right">{{$factura->iva}}</th>
                             <th style="width: 10%;" class="right">{{$factura->importe_subtotal}}</th>
                         </tr>
                         <tr>
-                            <th style="width: 90%;" class="left">Bonificación</th>
+                            <th style="width: 80%;" class="left">Bonificación</th>
+                            <th style="width: 10%;" class="right"></th>
                             <th style="width: 10%;" class="right">{{$factura->importe_bonificacion}}</th>
                         </tr>
                         <tr>
-                            <th style="width: 90%;" class="left">Total</th>
+                            <th style="width: 80%;" class="left">Total</th>
+                            <th style="width: 10%;" class="right">{{$factura->iva}}</th>
                             <th style="width: 10%;" class="right">${{$factura->importe_total}}</th>
                         </tr>
                     </tfoot>
@@ -404,6 +411,12 @@
                         <li>1er vencimiento, día 01</li>
                         <li>2do vencimiento, día 10</li>
                     </ul>
+                    <h3>Régimen de Transparencia Fiscal al Consumidor Ley 27.743</h3>
+                    <ul>
+                        <li>IVA contenido: {{$factura->importe_iva}}</li>
+                        <li>De cada item en la presente factura se ha discriminado el IVA para preservar la transparencia fiscal.</li>
+                    </ul>
+
                 </div>
                 
                 <h4>Descargue y controle su factura online</h4>

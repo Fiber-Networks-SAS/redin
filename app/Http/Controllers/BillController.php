@@ -212,7 +212,6 @@ class BillController extends Controller
             $factura->importe_subtotal = number_format($factura->importe_subtotal, 2);
             $factura->importe_bonificacion = number_format($factura->importe_bonificacion, 2);
             $factura->importe_total = number_format($factura->importe_total, 2);
-
             $factura->fecha_pago = $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null;
 
             $detalles =  $factura->detalle;
@@ -963,8 +962,10 @@ class BillController extends Controller
                     }
 
                     $subtotal += $importe_servicio;
-                }
 
+                }
+                // Calculo del IVA
+                $iva = $subtotal * 0.21;
                 // Cabecera
                 $factura = new Factura;
                 $factura->user_id               = $item['cliente']->id;
@@ -976,6 +977,7 @@ class BillController extends Controller
                 $factura->importe_subtotal      = $this->floatvalue(number_format($subtotal, 2));
                 $factura->importe_bonificacion  = $this->floatvalue(number_format($bonificacion_total, 2));
                 $factura->importe_total         = $this->floatvalue(number_format($subtotal - $bonificacion_total, 2));
+                $factura->importe_iva           = $this->floatvalue(number_format($iva, 2));
 
                 $mes_periodo = substr($request->periodo, 0, 2);
                 $ano_periodo = substr($request->periodo, 3, 4);
@@ -1035,6 +1037,7 @@ class BillController extends Controller
                         $factura_detalle->pp_flag = $servicio->pp_flag;
 
 
+                        $factura_detalle->importe_iva = $factura->importe_subtotal * 0.21;
                         // guardo el detalle de la factura
                         $factura_detalle->save();
                     }
@@ -1060,7 +1063,7 @@ class BillController extends Controller
             }
 
             // genero los pdf's: sólo del periodo y factura creada (paso el id para evitar regenerar todo)
-            $this->setFacturasPeriodoPDF($request->periodo, $factura->id); // antes regeneraba todo el periodo
+            $this->setFacturasPeriodoPDF($request->periodo); // antes regeneraba todo el periodo
             $filename = $this->getFacturasPeriodoPDFPath($request);
 
             return redirect('/admin/period')->with(['status' => 'success', 'message' => 'El período ' . $request->periodo . ' fué facturado.', 'icon' => 'fa-smile-o', 'filename' => $filename]);
@@ -2485,7 +2488,8 @@ class BillController extends Controller
 
                     $subtotal += $importe_servicio;
                 }
-
+                //Calculo de IVA
+                $iva = $subtotal * 0.21;
                 // Cabecera
                 $factura = new Factura;
                 $factura->user_id               = $item['cliente']->id;
@@ -2497,6 +2501,7 @@ class BillController extends Controller
                 $factura->importe_subtotal      = $this->floatvalue(number_format($subtotal, 2));
                 $factura->importe_bonificacion  = $this->floatvalue(number_format($bonificacion_total, 2));
                 $factura->importe_total         = $this->floatvalue(number_format($subtotal - $bonificacion_total, 2));
+                $factura->importe_iva           = $this->floatvalue(number_format($iva, 2));
 
                 $mes_periodo = substr($request->periodo, 0, 2);
                 $ano_periodo = substr($request->periodo, 3, 4);
