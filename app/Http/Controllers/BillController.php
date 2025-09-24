@@ -947,14 +947,15 @@ class BillController extends Controller
                         ->whereRaw('fecha_inicio <= ?', [$fecha_facturacion])
                         ->whereRaw('DATE_ADD(fecha_inicio, INTERVAL periodos_bonificacion MONTH) > ?', [$fecha_facturacion])
                         ->first();
-
                     if ($bonificacion) {
                         $descuento_servicio = $bonificacion->calcularBonificacion($importe_servicio);
                         $bonificacion_total += $descuento_servicio;
                         // Guardar información de bonificación en el servicio para el detalle
                         $servicio->bonificacion_aplicada = $descuento_servicio;
                         $servicio->bonificacion_id = $bonificacion->id;
+                        $servicio->bonificacion_detalle = $bonificacion->descripcion ? $bonificacion->descripcion : 'Bonificacion aplicada al servicio';
                         $servicio->bonificacion_porcentaje = $bonificacion->porcentaje_bonificacion;
+                        $servicio->iva_bonificacion = $descuento_servicio * 0.21;
                     } else {
                         $servicio->bonificacion_aplicada = 0;
                         $servicio->bonificacion_id = null;
@@ -964,8 +965,10 @@ class BillController extends Controller
                     $subtotal += $importe_servicio;
 
                 }
-                // Calculo del IVA
-                $iva = $subtotal * 0.21;
+                //Calculo de IVA
+                $iva_subtotal                      = ($subtotal) * 0.21;
+                $iva_bonificacion                  = ($bonificacion_total) * 0.21;
+                $iva                               = ($subtotal - $bonificacion_total) * 0.21;
                 // Cabecera
                 $factura = new Factura;
                 $factura->user_id               = $item['cliente']->id;
@@ -974,10 +977,12 @@ class BillController extends Controller
                 $factura->nro_factura           = $this->getNroFactura($item['cliente']->talonario_id);
                 $factura->periodo               = $request->periodo;
                 $factura->fecha_emision         = Carbon::createFromFormat('d/m/Y', $request->fecha_emision);
-                $factura->importe_subtotal      = $this->floatvalue(number_format($subtotal, 2));
-                $factura->importe_bonificacion  = $this->floatvalue(number_format($bonificacion_total, 2));
-                $factura->importe_total         = $this->floatvalue(number_format($subtotal - $bonificacion_total, 2));
-                $factura->importe_iva           = $this->floatvalue(number_format($iva, 2));
+                $factura->importe_subtotal         = $this->floatvalue(number_format($subtotal, 2));
+                $factura->importe_subtotal_iva     = $this->floatvalue(number_format($iva_subtotal, 2));
+                $factura->importe_bonificacion     = $this->floatvalue(number_format($bonificacion_total, 2));
+                $factura->importe_bonificacion_iva = $this->floatvalue(number_format($iva_bonificacion, 2));
+                $factura->importe_total            = $this->floatvalue(number_format($subtotal - $bonificacion_total, 2));
+                $factura->importe_iva              = $this->floatvalue(number_format($iva, 2));
 
                 $mes_periodo = substr($request->periodo, 0, 2);
                 $ano_periodo = substr($request->periodo, 3, 4);
@@ -1033,11 +1038,27 @@ class BillController extends Controller
                             $factura_detalle->costo_instalacion = $servicio->costo_instalacion_importe_pagar > 0 ? $servicio->costo_instalacion_importe_pagar : null;
                             $factura_detalle->instalacion_cuota = $servicio->costo_instalacion_importe_pagar > 0 ? $servicio->costo_instalacion_cuotas_pagas + 1 : null;
                         }
-
                         $factura_detalle->pp_flag = $servicio->pp_flag;
+                        if($servicio->bonificacion_id != null){
+                            $factura_detalle->iva_bonificacion = $servicio->iva_bonificacion;
+                            $factura_detalle->importe_bonificacion = $servicio->bonificacion_aplicada;
+                            $factura_detalle->bonificacion_detalle = $servicio->bonificacion_detalle;
+                        }
 
+                        // Calcular el monto de IVA para este servicio
+                        $importe_servicio = 0;
+                        if ($servicio->costo_proporcional_importe > 0) {
+                            $importe_servicio += $servicio->costo_proporcional_importe;
+                        }
+                        if ($servicio->costo_abono_pagar > 0) {
+                            $importe_servicio += $servicio->costo_abono_pagar;
+                        }
+                        if ($servicio->costo_instalacion_importe_pagar > 0) {
+                            $importe_servicio += $servicio->costo_instalacion_importe_pagar;
+                        }
+                        // El IVA se calcula solo si el importe es mayor a cero
+                        $factura_detalle->importe_iva = $importe_servicio > 0 ? round($importe_servicio * 0.21, 2) : 0;
 
-                        $factura_detalle->importe_iva = $factura->importe_subtotal * 0.21;
                         // guardo el detalle de la factura
                         $factura_detalle->save();
                     }
@@ -2479,7 +2500,9 @@ class BillController extends Controller
                         // Guardar información de bonificación en el servicio para el detalle
                         $servicio->bonificacion_aplicada = $descuento_servicio;
                         $servicio->bonificacion_id = $bonificacion->id;
+                        $servicio->bonificacion_detalle = $bonificacion->descripcion ? $bonificacion->descripcion : 'Bonificacion aplicada al servicio';
                         $servicio->bonificacion_porcentaje = $bonificacion->porcentaje_bonificacion;
+                        $servicio->iva_bonificacion = $descuento_servicio * 0.21;
                     } else {
                         $servicio->bonificacion_aplicada = 0;
                         $servicio->bonificacion_id = null;
@@ -2489,20 +2512,25 @@ class BillController extends Controller
                     $subtotal += $importe_servicio;
                 }
                 //Calculo de IVA
-                $iva = $subtotal * 0.21;
+                $iva_subtotal                      = ($subtotal) * 0.21;
+                $iva_bonificacion                  = ($bonificacion_total) * 0.21;
+                $iva                               = ($subtotal - $bonificacion_total) * 0.21;
                 // Cabecera
                 $factura = new Factura;
-                $factura->user_id               = $item['cliente']->id;
-                $factura->nro_cliente           = $item['cliente']->nro_cliente;
-                $factura->talonario_id          = $item['cliente']->talonario_id;
-                $factura->nro_factura           = $this->getNroFactura($item['cliente']->talonario_id);
-                $factura->periodo               = $request->periodo;
-                $factura->fecha_emision         = Carbon::createFromFormat('d/m/Y', $request->fecha_emision);
-                $factura->importe_subtotal      = $this->floatvalue(number_format($subtotal, 2));
-                $factura->importe_bonificacion  = $this->floatvalue(number_format($bonificacion_total, 2));
-                $factura->importe_total         = $this->floatvalue(number_format($subtotal - $bonificacion_total, 2));
-                $factura->importe_iva           = $this->floatvalue(number_format($iva, 2));
+                $factura->user_id                  = $item['cliente']->id;
+                $factura->nro_cliente              = $item['cliente']->nro_cliente;
+                $factura->talonario_id             = $item['cliente']->talonario_id;
+                $factura->nro_factura              = $this->getNroFactura($item['cliente']->talonario_id);
+                $factura->periodo                  = $request->periodo;
+                $factura->fecha_emision            = Carbon::createFromFormat('d/m/Y', $request->fecha_emision);
+                $factura->importe_subtotal         = $this->floatvalue(number_format($subtotal, 2));
+                $factura->importe_subtotal_iva     = $this->floatvalue(number_format($iva_subtotal, 2));
+                $factura->importe_bonificacion     = $this->floatvalue(number_format($bonificacion_total, 2));
+                $factura->importe_bonificacion_iva = $this->floatvalue(number_format($iva_bonificacion, 2));
+                $factura->importe_total            = $this->floatvalue(number_format($subtotal - $bonificacion_total, 2));
+                $factura->importe_iva              = $this->floatvalue(number_format($iva, 2));
 
+                
                 $mes_periodo = substr($request->periodo, 0, 2);
                 $ano_periodo = substr($request->periodo, 3, 4);
 
@@ -2549,7 +2577,8 @@ class BillController extends Controller
                         $factura_detalle->dias_proporcional = $servicio->costo_proporcional_dias > 0 ? $servicio->costo_proporcional_dias : null;
 
                         $factura_detalle->instalacion_plan_pago = $servicio->plan_pago;
-
+                        $factura_detalle->pp_flag = $servicio->pp_flag;
+                        
                         if ($servicio->pp_flag == 1) {
                             $factura_detalle->costo_instalacion = $servicio->abono_mensual;
                             $factura_detalle->instalacion_cuota = $servicio->costo_instalacion_cuotas_pagas + 1;
@@ -2558,8 +2587,28 @@ class BillController extends Controller
                             $factura_detalle->instalacion_cuota = $servicio->costo_instalacion_importe_pagar > 0 ? $servicio->costo_instalacion_cuotas_pagas + 1 : null;
                         }
 
-                        $factura_detalle->pp_flag = $servicio->pp_flag;
-
+                        if($servicio->bonificacion->id != null){
+                            $factura_detalle->iva_bonificacion = $servicio->iva_bonificacion;
+                            $factura_detalle->importe_bonificacion = $servicio->bonificacion_aplicada;
+                            $factura_detalle->bonificacion_detalle = $servicio->bonificacion_detalle;
+                        }
+                         // Calcular el monto de IVA para este servicio
+                        $importe_servicio = 0;
+                        if ($servicio->costo_proporcional_importe > 0) {
+                            $importe_servicio += $servicio->costo_proporcional_importe;
+                        }
+                        if ($servicio->costo_abono_pagar > 0) {
+                            $importe_servicio += $servicio->costo_abono_pagar;
+                        }
+                        if ($servicio->costo_instalacion_importe_pagar > 0) {
+                            $importe_servicio += $servicio->costo_instalacion_importe_pagar;
+                        }
+                        // Restar bonificación aplicada si existe
+                        if (isset($servicio->bonificacion_aplicada) && $servicio->bonificacion_aplicada > 0) {
+                            $importe_servicio -= $servicio->bonificacion_aplicada;
+                        }
+                        // El IVA se calcula solo si el importe es mayor a cero
+                        $factura_detalle->importe_iva = $importe_servicio > 0 ? round($importe_servicio * 0.21, 2) : 0;
 
                         // guardo el detalle de la factura
                         $factura_detalle->save();

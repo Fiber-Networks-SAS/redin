@@ -327,6 +327,14 @@
                                                 <td class="right">{{number_format($fila_importe, 2)}}</td>   
                                             </tr>
 
+                                            <?php if ($detalle->bonificacion_detalle != null): ?>
+                                                <tr>
+                                                    <td class="left">Bonificacion: {{$detalle->bonificacion_detalle}}</td>
+                                                    <td class="right">-{{number_format($detalle->iva_bonificacion, 2)}}</td>
+                                                    <td class="right">-{{number_format($detalle->importe_bonificacion, 2)}}</td>
+                                                </tr>
+                                            <?php endif; ?>
+
                                             <?php if ($detalle->instalacion_cuota != null && $detalle->instalacion_cuota <= $detalle->instalacion_plan_pago): ?>
                                                     <tr>
                                                         <td class="left"> *Costo de Instalación (Cuota {{$detalle->instalacion_cuota.'/'.$detalle->instalacion_plan_pago}})</td>
@@ -347,17 +355,17 @@
                     <tfoot>
                         <tr>
                             <th style="width: 80%;" class="left">Subtotal</th>
-                            <th style="width: 10%;" class="right">{{$factura->iva}}</th>
-                            <th style="width: 10%;" class="right">{{$factura->importe_subtotal}}</th>
+                            <th style="width: 10%;" class="right">${{$factura->importe_subtotal_iva}}</th>
+                            <th style="width: 10%;" class="right">${{$factura->importe_subtotal}}</th>
                         </tr>
                         <tr>
                             <th style="width: 80%;" class="left">Bonificación</th>
-                            <th style="width: 10%;" class="right"></th>
-                            <th style="width: 10%;" class="right">{{$factura->importe_bonificacion}}</th>
+                            <th style="width: 10%;" class="right">- ${{$factura->importe_bonificacion_iva}}</th>
+                            <th style="width: 10%;" class="right">- ${{$factura->importe_bonificacion}}</th>
                         </tr>
                         <tr>
                             <th style="width: 80%;" class="left">Total</th>
-                            <th style="width: 10%;" class="right">{{$factura->iva}}</th>
+                            <th style="width: 10%;" class="right">${{$factura->importe_iva}}</th>
                             <th style="width: 10%;" class="right">${{$factura->importe_total}}</th>
                         </tr>
                     </tfoot>
