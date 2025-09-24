@@ -421,7 +421,7 @@
                     </ul>
                     <h3>Régimen de Transparencia Fiscal al Consumidor Ley 27.743</h3>
                     <ul>
-                        <li>IVA contenido: {{$factura->importe_iva}}</li>
+                        <li>IVA contenido: ${{$factura->importe_iva}}</li>
                         <li>De cada item en la presente factura se ha discriminado el IVA para preservar la transparencia fiscal.</li>
                     </ul>
 
