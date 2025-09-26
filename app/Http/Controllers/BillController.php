@@ -45,6 +45,7 @@ use PDF;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Support\Facades\Log;
+use App\Services\AfipService;
 
 /*
     --- FOR SEND EMAIL ---
@@ -926,6 +927,7 @@ class BillController extends Controller
 
             // ordeno los items por el atributo "domicilio"
             usort($items, array($this, "cmp_obj"));
+            $afip = new AfipService();
 
             // debug
             // return $items;
@@ -1013,6 +1015,11 @@ class BillController extends Controller
                 // ----------------------------------------------------
 
                 $factura->tercer_vto_tasa       = $interes->tercer_vto_tasa;
+                $responseAfip = $afip->facturaB(1, ($subtotal - $bonificacion_total));
+                $numero_factura = $afip->getLastVoucher(1, 6);
+                $factura->cae = $responseAfip['CAE'];
+                $factura->cae_vto = $responseAfip['CAEFchVto'];
+                $factura->nro_factura = $numero_factura;
 
                 // guardo la factura
                 if ($factura->save()) {
@@ -1062,12 +1069,12 @@ class BillController extends Controller
                         // guardo el detalle de la factura
                         $factura_detalle->save();
                     }
-                }
+                }  
 
                 // agrego las facturas al array general
                 $facturas[] = $factura;
-            }
-
+            }   
+            //registrar y obtener datos de AFIP
             // debug
             // return $facturas;
             // return $facturas = Factura::where('periodo', $request->periodo)->get();
@@ -1082,7 +1089,6 @@ class BillController extends Controller
                     Log::error("Error enviando email automático para factura ID: {$factura->id}. Error: " . $e->getMessage());
                 }
             }
-
             // genero los pdf's: sólo del periodo y factura creada (paso el id para evitar regenerar todo)
             $this->setFacturasPeriodoPDF($request->periodo); // antes regeneraba todo el periodo
             $filename = $this->getFacturasPeriodoPDFPath($request);
@@ -1397,7 +1403,6 @@ class BillController extends Controller
     {
 
         $facturas = Factura::where('periodo', $periodo)->get();
-
         foreach ($facturas as $factura) {
 
             // formateo los campos
@@ -1429,7 +1434,6 @@ class BillController extends Controller
             foreach ($detalles as $detalle) {
                 $detalle->servicio;
             }
-
             // genero los PDF's de las facturas individuales
             if ($factura_id == null || $factura_id == $factura->id) {
 
@@ -1441,7 +1445,6 @@ class BillController extends Controller
                 $pdf->save($factura->filePath);
             }
         }
-
         $this->setPeriodoPDF($periodo, $facturas);
 
         // genero los PDF's de las facturas del periodo

@@ -10,11 +10,13 @@ class AfipService
 
     public function __construct()
     {
+        $cert = file_get_contents(storage_path('app/afip.crt'));
+        $key = file_get_contents(storage_path('app/afip.pem'));
         $this->afip = new Afip([
-            'CUIT' => env('AFIP_CUIT'),
+            'CUIT' => 20427154921,
             'production' => env('AFIP_PRODUCTION', false),
-            'cert' => env('AFIP_CERT'),
-            'key'  => env('AFIP_KEY'),
+            'cert' => $cert,
+            'key'  => $key,
         ]);
     }
 
@@ -29,7 +31,7 @@ class AfipService
     /**
      * Obtener el último número de comprobante emitido
      */
-    private function getLastVoucher($ptoVta, $cbteTipo)
+    public function getLastVoucher($ptoVta, $cbteTipo)
     {
         return $this->afip->ElectronicBilling->GetLastVoucher($ptoVta, $cbteTipo);
     }
@@ -77,7 +79,10 @@ class AfipService
     public function facturaB($ptoVta, $importe)
     {
         $lastVoucher = $this->getLastVoucher($ptoVta, 6);
-
+        $importeTotal = round($importe, 2);
+        $importeNeto = round($importe / 1.21, 2);
+        $importeIVA = round($importeTotal - $importeNeto, 2);
+        $baseImponibleIVA = round($importeTotal, 2);
         $data = [
             'CantReg'   => 1,
             'PtoVta'    => $ptoVta,
@@ -88,24 +93,29 @@ class AfipService
             'CbteDesde' => $lastVoucher + 1,
             'CbteHasta' => $lastVoucher + 1,
             'CbteFch'   => intval(date('Ymd')),
-            'ImpTotal'  => $importe * 1.21,
+            'ImpTotal'  => $importeTotal,
             'ImpTotConc'=> 0,
-            'ImpNeto'   => $importe,
+            'ImpNeto'   => $importeNeto,
             'ImpOpEx'   => 0,
-            'ImpIVA'    => $importe * 0.21,
+            'ImpIVA'    => $importeIVA,
             'ImpTrib'   => 0,
             'MonId'     => 'PES',
             'MonCotiz'  => 1,
             'Iva'       => [
                 [
                     'Id'      => 5,
-                    'BaseImp' => $importe,
-                    'Importe' => $importe * 0.21,
+                    'BaseImp' => $importeNeto,
+                    'Importe' => $importeIVA,
                 ]
             ],
+            'CondicionIVAReceptorId' => 4,
         ];
-
-        return $this->createVoucher($data);
+        try {
+            return $this->createVoucher($data);
+        } catch (\Exception $e) {
+            \Log::error('Error al crear factura B: ' . $e->getMessage());
+            dd($e);
+        }
     }
 
     /**

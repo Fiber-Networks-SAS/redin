@@ -18,6 +18,15 @@ class Factura extends Model implements AuditableContract
 	protected $table = 'facturas';
 	// define que todos los campos permiten entrada
 	protected $fillable = [];
+    //agregar casteos
+//     protected $casts = [
+//     'importe_total' => 'float',
+//     'importe_subtotal' => 'float',
+//     'importe_subtotal_iva' => 'float',
+//     'importe_iva' => 'float',
+//     'importe_bonificacion' => 'float',
+//     'importe_bonificacion_iva' => 'float',
+// ];
 	
 	// crea el los campos created_at y updated_at
 	public $timestamps = false;

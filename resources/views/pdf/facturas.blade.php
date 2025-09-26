@@ -209,13 +209,35 @@
     <?php 
         $i = 1;
         
-        // Función simple para renderizar QR (declarada una sola vez fuera del loop)
+        // Función simple para renderizar QR
         if (!function_exists('qr')) {
             function qr($qrData, $fallbackCode, $size = '80px') {
                 if ($qrData && $qrData->qr_code_base64) {
                     return '<img src="data:image/png;base64,'.$qrData->qr_code_base64.'" style="width:'.$size.';height:'.$size.';" alt="QR">';
                 }
                 return '';
+            }
+        }
+
+        // Función para limpiar valores numéricos con formato
+        if (!function_exists('clean_number')) {
+            function clean_number($value) {
+                if (is_null($value) || $value === '') return 0;
+                
+                // Si ya es numérico, retornar directamente
+                if (is_numeric($value)) return floatval($value);
+                
+                // Limpiar comas y espacios, luego convertir a float
+                $cleaned = str_replace(',', '', trim($value));
+                return floatval($cleaned);
+            }
+        }
+
+        // Función para formatear números de manera segura
+        if (!function_exists('safe_number_format')) {
+            function safe_number_format($value, $decimals = 2) {
+                $num = clean_number($value);
+                return number_format($num, $decimals);
             }
         }
     ?>
@@ -227,8 +249,10 @@
             $qrCodePrimer = $factura->getPaymentPreferenceByVencimiento('primer');
             $qrCodeSegundo = $factura->getPaymentPreferenceByVencimiento('segundo');
             $qrCodeTercer = $factura->getPaymentPreferenceByVencimiento('tercer');
+            
+            // Debug: Verificar los valores de los QR codes
+            // var_dump($qrCodePrimer, $qrCodeSegundo, $qrCodeTercer);
         ?>
-
 
         <div class="title">
             <img src="{{ config('constants.logo_pdf') }}" alt="Logo">
@@ -244,6 +268,7 @@
                     <p>CUIT: {{ config('constants.company_cuit') }}</p>
                     <p>IIBB: {{ config('constants.company_iibb') }}</p>
                     <p>{{ config('constants.company_iva') }}</p>
+                    <p>CAE: {{ $factura->cae }}</p>
                 </div>
 
                 <div class="tipo_factura">
@@ -262,11 +287,11 @@
             
             <div class="row">
                 <div class="cod_barras">
-                    <?php echo qr($qrCodePrimer, $factura->primer_vto_codigo, '135px'); ?>
+
                 </div>
         
                 <div class="darkness">
-                    <p>Total a Pagar: ${{$factura->importe_total}}</p>
+                    <p>Total a Pagar: ${{ safe_number_format($factura->importe_total) }}</p>
                     <p>Vencimiento: {{$factura->primer_vto_fecha}}</p>
                     <p>Período: {{$factura->periodo}}</p>
                 </div>
@@ -274,15 +299,16 @@
             </div>
         </div> 
 
-
         <div class="content">
             
             <table>
                     <thead>
                         <tr>
-                            <th style="width: 80%;" class="left">Servicio</th>
+                            <th style="width: 60%;" class="left">Servicio</th>
+                            <th style="width: 10%;" class="right">Neto</th>
+                            <th style="width: 10%;" class="right">Tasa</th>
                             <th style="width: 10%;" class="right">IVA</th>
-                            <th style="width: 10%;" class="right">Importe</th>
+                            <th style="width: 10%;" class="right">Total</th>
                         </tr>
                     </thead>
                     
@@ -294,11 +320,13 @@
                                 
                                     <?php if ($detalle->instalacion_cuota != null && $detalle->instalacion_cuota <= $detalle->instalacion_plan_pago): ?>
                                             <tr>
-                                                <td class="detalle_row" colspan="3">                                            
+                                                <td class="detalle_row" colspan="5">                                            
                                                     <tr>
                                                         <td class="left">Convenio de Pago - Servicio {{$detalle->servicio->nombre}}  (Cuota {{$detalle->instalacion_cuota.'/'.$detalle->instalacion_plan_pago}})</td>   
-                                                        <td class="right">{{number_format($detalle->costo_instalacion * 0.21, 2)}}</td>  
-                                                        <td class="right">{{number_format($detalle->costo_instalacion, 2)}}</td>  
+                                                        <td class="right">{{ safe_number_format(clean_number($detalle->costo_instalacion) * 0.79) }}</td>  
+                                                        <td class="right">21%</td>  
+                                                        <td class="right">{{ safe_number_format(clean_number($detalle->costo_instalacion) * 0.21) }}</td>  
+                                                        <td class="right">{{ safe_number_format($detalle->costo_instalacion) }}</td>  
                                                     </tr>
                                                 </td> 
                                             </tr>                                            
@@ -307,39 +335,53 @@
                                 <?php else: ?>
 
                                     <tr>
-                                        <td class="detalle_row" colspan="3">
+                                        <td class="detalle_row" colspan="5">
                                             
-                                            <?php if(!is_null($detalle->abono_proporcional)){
-
-                                                        $label_dia = $detalle->dias_proporcional == 1 ? ' día' : ' días';
-
-                                                        $fila_detalle = $detalle->servicio->nombre . ' (Abono proporcional correspondiente a '. $detalle->dias_proporcional . $label_dia .' de servicio)';
-                                                        $fila_importe = $detalle->abono_proporcional;
-                                                  }else{
-                                                        $fila_detalle = $detalle->servicio->nombre;
-                                                        $fila_importe = $detalle->abono_mensual;
-                                                  }
+                                            <?php 
+                                                if(!is_null($detalle->abono_proporcional)){
+                                                    $label_dia = $detalle->dias_proporcional == 1 ? ' día' : ' días';
+                                                    $fila_detalle = $detalle->servicio->nombre . ' (Abono proporcional correspondiente a '. $detalle->dias_proporcional . $label_dia .' de servicio)';
+                                                    $fila_importe = $detalle->abono_proporcional;
+                                                } else {
+                                                    $fila_detalle = $detalle->servicio->nombre;
+                                                    $fila_importe = $detalle->abono_mensual;
+                                                }
+                                                
+                                                // Calcular Neto e IVA correctamente
+                                                $importe_neto = clean_number($fila_importe) - (clean_number($fila_importe) * 0.21);
+                                                $importe_iva = clean_number($fila_importe) * 0.21;
                                             ?>
 
                                             <tr>
-                                                <td class="left">{{$fila_detalle}}</td>   
-                                                <td class="right">{{number_format($detalle->importe_iva, 2)}}</td>   
-                                                <td class="right">{{number_format($fila_importe, 2)}}</td>   
+                                                <td class="left">{{$fila_detalle}}</td>
+                                                <td class="right">{{ safe_number_format($importe_neto) }}</td>   
+                                                <td class="right">21%</td>   
+                                                <td class="right">{{ safe_number_format($importe_iva) }}</td>   
+                                                <td class="right">{{ safe_number_format($fila_importe) }}</td>   
                                             </tr>
 
                                             <?php if ($detalle->bonificacion_detalle != null): ?>
+                                                <?php
+                                                    // Calcular Neto e IVA para bonificación
+                                                    $bonif_neto = clean_number($detalle->importe_bonificacion) * 0.79;
+                                                    $bonif_iva = clean_number($detalle->importe_bonificacion) - $bonif_neto;
+                                                ?>
                                                 <tr>
                                                     <td class="left">Bonificacion: {{$detalle->bonificacion_detalle}}</td>
-                                                    <td class="right">-{{number_format($detalle->iva_bonificacion, 2)}}</td>
-                                                    <td class="right">-{{number_format($detalle->importe_bonificacion, 2)}}</td>
+                                                    <td class="right">-{{ safe_number_format($bonif_neto) }}</td>
+                                                    <td class="right">21%</td>
+                                                    <td class="right">-{{ safe_number_format($bonif_iva) }}</td>
+                                                    <td class="right">-{{ safe_number_format($detalle->importe_bonificacion) }}</td>
                                                 </tr>
                                             <?php endif; ?>
 
                                             <?php if ($detalle->instalacion_cuota != null && $detalle->instalacion_cuota <= $detalle->instalacion_plan_pago): ?>
                                                     <tr>
                                                         <td class="left"> *Costo de Instalación (Cuota {{$detalle->instalacion_cuota.'/'.$detalle->instalacion_plan_pago}})</td>
-                                                        <td class="right">{{number_format($detalle->costo_instalacion * 0.21, 2)}}</td>
-                                                        <td class="right">{{number_format($detalle->costo_instalacion, 2)}}</td>  
+                                                        <td class="right">{{ safe_number_format(clean_number($detalle->costo_instalacion) * 0.79) }}</td>
+                                                        <td class="right">21%</td>
+                                                        <td class="right">{{ safe_number_format(clean_number($detalle->costo_instalacion) * 0.21) }}</td>
+                                                        <td class="right">{{ safe_number_format($detalle->costo_instalacion) }}</td>  
                                                     </tr>
                                             <?php endif; ?>  
 
@@ -354,19 +396,18 @@
                     
                     <tfoot>
                         <tr>
-                            <th style="width: 80%;" class="left">Subtotal</th>
-                            <th style="width: 10%;" class="right">${{$factura->importe_subtotal_iva}}</th>
-                            <th style="width: 10%;" class="right">${{$factura->importe_subtotal}}</th>
+                            <th style="width: 60%;" class="left">Subtotal</th>
+                            <th style="width: 10%;" class="right">${{ safe_number_format(clean_number($factura->importe_subtotal) - clean_number($factura->importe_subtotal_iva)) }}</th>
+                            <th style="width: 10%;" class="right"></th>
+                            <th style="width: 10%;" class="right">${{ safe_number_format($factura->importe_subtotal_iva) }}</th>
+                            <th style="width: 10%;" class="right">${{ safe_number_format($factura->importe_subtotal) }}</th>
                         </tr>
                         <tr>
-                            <th style="width: 80%;" class="left">Bonificación</th>
-                            <th style="width: 10%;" class="right">- ${{$factura->importe_bonificacion_iva}}</th>
-                            <th style="width: 10%;" class="right">- ${{$factura->importe_bonificacion}}</th>
-                        </tr>
-                        <tr>
-                            <th style="width: 80%;" class="left">Total</th>
-                            <th style="width: 10%;" class="right">${{$factura->importe_iva}}</th>
-                            <th style="width: 10%;" class="right">${{$factura->importe_total}}</th>
+                            <th style="width: 60%;" class="left">Total</th>
+                            <th style="width: 10%;" class="right">${{ safe_number_format(clean_number($factura->importe_total) - clean_number($factura->importe_iva)) }}</th>
+                            <th style="width: 10%;" class="right"></th>
+                            <th style="width: 10%;" class="right">${{ safe_number_format($factura->importe_iva) }}</th>
+                            <th style="width: 10%;" class="right">${{ safe_number_format($factura->importe_total) }}</th>
                         </tr>
                     </tfoot>
 
@@ -380,48 +421,60 @@
             <div style="width: 100%; overflow: hidden;">
                 <div style="width: 48%; float: left; margin-right: 3%;">
                     <div class="vencimiento">
-                        <p class="vto_title">Segundo Vencimiento</p>
+                        <p class="vto_title">Primer Vencimiento</p>
 
                         <div class="cod_barras" style="margin-top: -10px; margin-bottom: 10px;">
-                            <?php echo qr($qrCodeSegundo, $factura->segundo_vto_codigo, '135px'); ?>
+                            <?php 
+                                // Verificar si el QR code tiene datos
+                                if ($qrCodePrimer && $qrCodePrimer->qr_code_base64) {
+                                    echo qr($qrCodePrimer, $factura->primer_vto_codigo, '135px');
+                                } else {
+                                    echo '<p style="color: red;">QR no disponible</p>';
+                                }
+                            ?>
                         </div>
                 
                         <div class="darkness">
-                            <p>Importe: ${{$factura->segundo_vto_importe}}</p>
+                            <p>Importe: ${{ safe_number_format($factura->primer_vto_importe ?? $factura->importe_total) }}</p>
+                            <p>Vencimiento: {{$factura->primer_vto_fecha}}</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="width: 48%; float: left;">
+                    <div class="vencimiento">
+                        <p class="vto_title">Segundo Vencimiento</p>
+
+                        <div class="cod_barras" style="margin-top: -10px; margin-bottom: 10px;">
+                            <?php 
+                                // Verificar si el QR code tiene datos
+                                if ($qrCodeSegundo && $qrCodeSegundo->qr_code_base64) {
+                                    echo qr($qrCodeSegundo, $factura->segundo_vto_codigo, '135px');
+                                } else {
+                                    echo '<p style="color: red;">QR no disponible</p>';
+                                }
+                            ?>
+                        </div>
+                
+                        <div class="darkness">
+                            <p>Importe: ${{ safe_number_format($factura->segundo_vto_importe ?? $factura->importe_total) }}</p>
                             <p>Vencimiento: {{$factura->segundo_vto_fecha}}</p>
                         </div>
                     </div>
                 </div>
-                
-                <?php if($factura->tercer_vto_codigo): ?>
-                <div style="width: 48%; float: left;">
-                    <div class="vencimiento">
-                        <p class="vto_title">Tercer Vencimiento</p>
-
-                        <div class="cod_barras" style="margin-top: -10px; margin-bottom: 10px;">
-                            <?php echo qr($qrCodeTercer, $factura->tercer_vto_codigo, '135px'); ?>
-                        </div>
-                
-                        <div class="darkness">
-                            <p>Importe: ${{$factura->tercer_vto_importe}}</p>
-                            <p>Vencimiento: {{$factura->tercer_vto_fecha}}</p>
-                        </div>
-                    </div>
-                </div>
-                <?php endif; ?>
                 <div style="clear: both;"></div>
             </div>
 
             <div class="info">
                 <div class="mensaje">
-                    <h4>Sr. Cliente, a partir de la próxima factura se modifican los días de vencimiento de la siguiente manera:</h4>
+                    {{-- <h4>Sr. Cliente, a partir de la próxima factura se modifican los días de vencimiento de la siguiente manera:</h4>
                     <ul>
                         <li>1er vencimiento, día 01</li>
                         <li>2do vencimiento, día 10</li>
-                    </ul>
+                    </ul> --}}
                     <h3>Régimen de Transparencia Fiscal al Consumidor Ley 27.743</h3>
                     <ul>
-                        <li>IVA contenido: ${{$factura->importe_iva}}</li>
+                        <li>IVA contenido: ${{ safe_number_format($factura->importe_iva) }}</li>
                         <li>De cada item en la presente factura se ha discriminado el IVA para preservar la transparencia fiscal.</li>
                     </ul>
 
