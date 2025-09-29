@@ -1923,7 +1923,7 @@ function setInteresCostoInstalacion(){
 
         var costo = 0;
         costo = parseFloat($('#costo_instalacion').attr('costo_instalacion_base')) + parseFloat($('#costo_instalacion').attr('costo_instalacion_base') * $('select[name="plan_pago"] option:selected').attr('tasa') / 100);
-        costo = $.number(costo, 2, '.', ',');
+        costo = $.number(costo, 2, '.', '');
 
         $('#costo_instalacion').val(costo); 
 
