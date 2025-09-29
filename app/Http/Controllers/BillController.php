@@ -214,9 +214,9 @@ class BillController extends Controller
             $factura->primer_vto_fecha = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
             $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
 
-            $factura->importe_subtotal = number_format($factura->importe_subtotal, 2);
-            $factura->importe_bonificacion = number_format($factura->importe_bonificacion, 2);
-            $factura->importe_total = number_format($factura->importe_total, 2);
+            // $factura->importe_subtotal = number_format($factura->importe_subtotal, 2);
+            // $factura->importe_bonificacion = number_format($factura->importe_bonificacion, 2);
+            // $factura->importe_total = number_format($factura->importe_total, 2);
             $factura->fecha_pago = $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null;
 
             $detalles =  $factura->detalle;
@@ -255,14 +255,14 @@ class BillController extends Controller
             $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
             $factura->tercer_vto_fecha = Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y');
 
-            $factura->importe_subtotal = number_format($factura->importe_subtotal, 2);
-            $factura->importe_bonificacion = number_format($factura->importe_bonificacion, 2);
-            $factura->importe_total = number_format($factura->importe_total, 2);
-            $factura->segundo_vto_importe = number_format($factura->segundo_vto_importe, 2);
-            $factura->tercer_vto_importe = number_format($factura->tercer_vto_importe, 2);
+            // $factura->importe_subtotal = number_format($factura->importe_subtotal, 2);
+            // $factura->importe_bonificacion = number_format($factura->importe_bonificacion, 2);
+            // $factura->importe_total = number_format($factura->importe_total, 2);
+            // $factura->segundo_vto_importe = number_format($factura->segundo_vto_importe, 2);
+            // $factura->tercer_vto_importe = number_format($factura->tercer_vto_importe, 2);
 
             $factura->fecha_pago = $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null;
-            $factura->importe_pago = number_format($factura->importe_pago, 2);
+            // $factura->importe_pago = number_format($factura->importe_pago, 2);
             $factura->forma_pago = $factura->fecha_pago ? $this->forma_pago[$factura->forma_pago] : '';
             $factura->mail_date = $factura->mail_date ? Carbon::parse($factura->mail_date)->format('d/m/Y') : null;
 
@@ -412,10 +412,10 @@ class BillController extends Controller
         $factura->primer_vto_fecha = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
         $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
 
-        $factura->importe_subtotal = number_format($factura->importe_subtotal, 2);
-        $factura->importe_bonificacion = number_format($factura->importe_bonificacion, 2);
-        $factura->importe_total = number_format($factura->importe_total, 2);
-        $factura->segundo_vto_importe = number_format($factura->segundo_vto_importe, 2);
+        // $factura->importe_subtotal = number_format($factura->importe_subtotal, 2);
+        // $factura->importe_bonificacion = number_format($factura->importe_bonificacion, 2);
+        // $factura->importe_total = number_format($factura->importe_total, 2);
+        // $factura->segundo_vto_importe = number_format($factura->segundo_vto_importe, 2);
 
         $factura->fecha_pago = $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null;
 
@@ -1563,11 +1563,11 @@ class BillController extends Controller
             $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
             $factura->tercer_vto_fecha  = Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y');
 
-            $factura->importe_subtotal      = number_format($factura->importe_subtotal, 2);
-            $factura->importe_bonificacion  = number_format($factura->importe_bonificacion, 2);
-            $factura->importe_total         = number_format($factura->importe_total, 2);
-            $factura->segundo_vto_importe   = number_format($factura->segundo_vto_importe, 2);
-            $factura->tercer_vto_importe    = number_format($factura->tercer_vto_importe, 2);
+            // $factura->importe_subtotal      = number_format($factura->importe_subtotal, 2);
+            // $factura->importe_bonificacion  = number_format($factura->importe_bonificacion, 2);
+            // $factura->importe_total         = number_format($factura->importe_total, 2);
+            // $factura->segundo_vto_importe   = number_format($factura->segundo_vto_importe, 2);
+            // $factura->tercer_vto_importe    = number_format($factura->tercer_vto_importe, 2);
 
             // genero el path del pdf de la factura
             $factura->filename = $factura->talonario->nro_punto_vta . '-' . $factura->nro_factura;
@@ -1864,11 +1864,11 @@ class BillController extends Controller
             $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
             $factura->tercer_vto_fecha  = Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y');
 
-            $factura->importe_subtotal      = number_format($factura->importe_subtotal, 2);
-            $factura->importe_bonificacion  = number_format($factura->importe_bonificacion, 2);
-            $factura->importe_total         = number_format($factura->importe_total, 2);
-            $factura->segundo_vto_importe   = number_format($factura->segundo_vto_importe, 2);
-            $factura->tercer_vto_importe    = number_format($factura->tercer_vto_importe, 2);
+            // $factura->importe_subtotal      = number_format($factura->importe_subtotal, 2);
+            // $factura->importe_bonificacion  = number_format($factura->importe_bonificacion, 2);
+            // $factura->importe_total         = number_format($factura->importe_total, 2);
+            // $factura->segundo_vto_importe   = number_format($factura->segundo_vto_importe, 2);
+            // $factura->tercer_vto_importe    = number_format($factura->tercer_vto_importe, 2);
 
             // datos del cliente
             $factura->cliente;
