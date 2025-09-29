@@ -1476,6 +1476,9 @@ function getAutocompleteData(ajaxURL, elementList, elementID ) {
                 lookup: data,
                 onSelect: function (suggestion) {
                     elementID.val(suggestion.data);
+                    if (elementList.is('#autocomplete-service-name')) {
+                        getPrecioFromServicio();
+                    }
                     // alert('You selected: ' + suggestion.value + ', ' + suggestion.data);
                 }
             });

@@ -216,7 +216,7 @@
                     @if(count($talonarios))
                         <select class="form-control" name="talonario_id" required>
                             @foreach($talonarios as $talonario)
-                                <option value="{{$talonario->id}}" {{ $user->talonario_id ==  $talonario->id || old('talonario_id') == $talonario->id ? 'selected' : '' }}>{{$talonario->nombre}}</option>
+                                <option value="{{$talonario->id}}" data-letra="{{$talonario->letra}}" {{ $user->talonario_id ==  $talonario->id || old('talonario_id') == $talonario->id ? 'selected' : '' }}>{{$talonario->nombre}}</option>
                             @endforeach
                         </select>
                     @else
@@ -379,5 +379,29 @@
   </div>
 </div>
 <!-- /page content -->
+
+<script>
+$(document).ready(function() {
+    function updateDniField() {
+        var selectedOption = $('select[name="talonario_id"] option:selected');
+        var letra = selectedOption.data('letra');
+        if (letra == 'A') {
+            $('#dni').attr('placeholder', 'CUIT sin guiones (11 dígitos)');
+            $('#dni').attr('maxlength', '11');
+            $('#dni').attr('minlength', '11');
+            $('label[for="dni"]').html('CUIT <span class="required">*</span>');
+        } else {
+            $('#dni').attr('placeholder', '');
+            $('#dni').removeAttr('maxlength');
+            $('#dni').removeAttr('minlength');
+            $('label[for="dni"]').html('DNI / CUIT <span class="required">*</span>');
+        }
+    }
+    updateDniField();
+    $('select[name="talonario_id"]').change(function() {
+        updateDniField();
+    });
+});
+</script>
 
 @include('layout_admin.footer')

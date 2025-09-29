@@ -1162,14 +1162,45 @@ class BillController extends Controller
                 // ----------------------------------------------------
 
                 $factura->tercer_vto_tasa       = $interes->tercer_vto_tasa;
-                $responseAfip = $afip->facturaB(1, ($subtotal - $bonificacion_total));
-                $numero_factura = $afip->getLastVoucher(1, 6);
-                $factura->cae = $responseAfip['CAE'];
-                $factura->cae_vto = $responseAfip['CAEFchVto'];
-                $factura->nro_factura = $numero_factura;
 
                 // guardo la factura
                 if ($factura->save()) {
+
+                    // Emitir factura en AFIP
+                    try {
+                        if ($talonario->letra == 'A') {
+                            $afipResponse = $this->afipService->facturaA(
+                                $talonario->nro_punto_vta,
+                                $item['cliente']->cuit,
+                                $factura->importe_total
+                            );
+                        } else {
+                            $afipResponse = $this->afipService->facturaB(
+                                $talonario->nro_punto_vta,
+                                $factura->importe_total
+                            );
+                        }
+
+                        Log::info('Respuesta AFIP factura periódica', $afipResponse);
+
+                        // Actualizar factura con datos de AFIP
+                        if (isset($afipResponse['CAE']) && !empty($afipResponse['CAE'])) {
+                            $factura->cae = $afipResponse['CAE'];
+                            try {
+                                $factura->cae_vto = isset($afipResponse['CAEFchVto']) ? Carbon::createFromFormat('Ymd', $afipResponse['CAEFchVto']) : null;
+                            } catch (\Exception $e) {
+                                Log::error('Error parsing CAEFchVto en factura periódica: ' . $e->getMessage());
+                                $factura->cae_vto = null;
+                            }
+                            $factura->save();
+                            Log::info('Factura periódica actualizada con datos AFIP', ['factura_id' => $factura->id, 'cae' => $factura->cae]);
+                        } else {
+                            Log::warning('AFIP no devolvió CAE válido para factura periódica', ['factura_id' => $factura->id, 'afip_response' => $afipResponse]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::error('Error al emitir factura periódica en AFIP: ' . $e->getMessage());
+                        // No interrumpe el proceso, la factura se guarda sin CAE
+                    }
 
                     // Detalle
                     foreach ($item['servicios_activos'] as $servicio) {

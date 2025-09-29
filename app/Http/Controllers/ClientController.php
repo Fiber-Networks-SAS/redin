@@ -1074,6 +1074,14 @@ class ClientController extends Controller
             'picture'           => 'max:2000|mimes:jpg,jpeg,png,gif,bmp',
             );
 
+        // Si el talonario es A, cambiar la regla de dni a 11 dígitos
+        if ($request->talonario_id) {
+            $talonario = Talonario::find($request->talonario_id);
+            if ($talonario && $talonario->letra == 'A') {
+                $rules['dni'] = 'required|numeric|digits:11';
+            }
+        }
+
         $validator = Validator::make($request->all(), $rules);
         
         if($validator->fails())
@@ -1251,6 +1259,14 @@ class ClientController extends Controller
             'password_confirm'  => 'min:8|same:password',
             'picture'           => 'max:2000|mimes:jpg,jpeg,png,gif,bmp',
             );
+
+        // Si el talonario es A, cambiar la regla de dni a 11 dígitos
+        if ($request->talonario_id) {
+            $talonario = Talonario::find($request->talonario_id);
+            if ($talonario && $talonario->letra == 'A') {
+                $rules['dni'] = 'required|numeric|digits:11';
+            }
+        }
 
         $validator = Validator::make($request->all(), $rules);
         
