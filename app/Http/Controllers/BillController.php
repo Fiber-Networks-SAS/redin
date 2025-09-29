@@ -2776,7 +2776,7 @@ class BillController extends Controller
                             $factura_detalle->instalacion_cuota = $servicio->costo_instalacion_importe_pagar > 0 ? $servicio->costo_instalacion_cuotas_pagas + 1 : null;
                         }
 
-                        if ($servicio->bonificacion->id != null) {
+                        if ($servicio->bonificacion_id != null) {
                             $factura_detalle->iva_bonificacion = $servicio->iva_bonificacion;
                             $factura_detalle->importe_bonificacion = $servicio->bonificacion_aplicada;
                             $factura_detalle->bonificacion_detalle = $servicio->bonificacion_detalle;
