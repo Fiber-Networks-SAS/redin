@@ -1568,7 +1568,13 @@ function getPrecioFromServicio() {
             if (data != 'null' && data != '') {
 
                 var abono_mensual = data.abono_mensual;
-                data.abono_mensual = abono_mensual.replace(',', '');
+                data.abono_mensual = abono_mensual.replace(/,/g, '');
+
+                var abono_proporcional = data.abono_proporcional;
+                data.abono_proporcional = abono_proporcional.replace(/,/g, '');
+
+                var costo_instalacion = data.costo_instalacion;
+                data.costo_instalacion = costo_instalacion.replace(/,/g, '');
 
                 $('#abono_mensual').val(data.abono_mensual);
                 $('#abono_proporcional').val(data.abono_proporcional);
