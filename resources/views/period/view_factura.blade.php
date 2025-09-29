@@ -131,6 +131,48 @@
 
       <div class="clearfix"></div>
 
+      @if(isset($notasCredito) && $notasCredito->count() > 0)
+      <div class="row">
+        <div class="col-md-12 col-sm-12 col-xs-12">
+          <div class="x_panel">
+            <div class="x_title">
+              <h2>Historial de Bonificaciones</h2>
+              <div class="clearfix"></div>
+            </div>
+            
+            <div class="x_content">
+              <table class="table table-striped table-bordered">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Nota de Crédito</th>
+                    <th>Detalle</th>
+                    <th class="text-right">Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @foreach($notasCredito as $nota)
+                  <tr>
+                    <td>{{ \Carbon\Carbon::parse($nota->created_at)->format('d/m/Y H:i') }}</td>
+                    <td>{{ $nota->talonario->letra }} {{ $nota->talonario->nro_punto_vta }}-{{ str_pad($nota->nro_nota_credito, 8, '0', STR_PAD_LEFT) }}</td>
+                    <td>{{ $nota->motivo }}</td>
+                    <td class="text-right">${{ number_format($nota->importe_bonificacion, 2) }}</td>
+                  </tr>
+                  @endforeach
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th colspan="3" class="text-right"><strong>Total Bonificaciones:</strong></th>
+                    <th class="text-right"><strong>${{ number_format($notasCredito->sum('importe_bonificacion'), 2) }}</strong></th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      @endif
+
       <div class="row">
         <div class="col-md-12 col-sm-12 col-xs-12">
           

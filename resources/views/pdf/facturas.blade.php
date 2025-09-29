@@ -484,6 +484,18 @@
                 <p>{{ config('constants.company_web') }}</p>        
                 <p>Tel.: {{ config('constants.company_tel') }}</p>
                 <p>{{ config('constants.account_info') }}</p>
+
+                @if($factura->notaCredito)
+                <div style="border: 1px solid #000; padding: 10px; margin-top: 20px;">
+                    <h4 style="color: #FF0000;">NOTA DE CRÉDITO</h4>
+                    <p><strong>Número de Nota de Crédito:</strong> {{ $factura->notaCredito->talonario->letra }} {{ $factura->notaCredito->talonario->nro_punto_vta }}-{{ str_pad($factura->notaCredito->nro_nota_credito, 8, '0', STR_PAD_LEFT) }}</p>
+                    <p><strong>Fecha de Emisión:</strong> {{ \Carbon\Carbon::parse($factura->notaCredito->fecha_emision)->format('d/m/Y') }}</p>
+                    <p><strong>Importe Bonificación:</strong> ${{ number_format($factura->notaCredito->importe_bonificacion, 2) }}</p>
+                    <p><strong>CAE:</strong> {{ $factura->notaCredito->cae }}</p>
+                    <p><strong>Vencimiento CAE:</strong> {{ \Carbon\Carbon::parse($factura->notaCredito->cae_vto)->format('d/m/Y') }}</p>
+                    <p><strong>Motivo:</strong> {{ $factura->notaCredito->motivo }}</p>
+                </div>
+                @endif
             </div>
         </div>
 
