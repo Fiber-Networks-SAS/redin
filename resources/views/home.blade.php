@@ -37,7 +37,7 @@
       <div class="login_wrapper">
 
         <span class="top-logo">
-          <a href="/"><img src="{{ config('constants.logo') }}" class="logo-home" alt="{{ config('constants.title') }}">{{ config('constants.title') }}</a>
+          <a href="/"><img src="{{ config('constants.logo') }}" class="logo-home" alt="{{ config('constants.title') }}"></a>
         </span>
 
         <div class="animate form login_form">

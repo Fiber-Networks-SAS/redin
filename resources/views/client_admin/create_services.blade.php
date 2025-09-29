@@ -102,7 +102,7 @@
                 <div class="form-group">
                   <label class="control-label col-md-3 col-sm-3 col-xs-12" for="abono_mensual">Abono Mensual <span class="required">*</span></label>
                   <div class="col-md-6 col-sm-6 col-xs-12">
-                    <input type="text" id="abono_mensual" name="abono_mensual" class="form-control col-md-7 col-xs-12 @if ($errors->has('abono_mensual')) parsley-error @endif" value="{{ old('abono_mensual') ? old('abono_mensual') : '' }}" required>
+                    <input type="text" id="abono_mensual" name="abono_mensual" class="form-control col-md-7 col-xs-12 @if ($errors->has('abono_mensual')) parsley-error @endif" value="{{ old('abono_mensual') ? old('abono_mensual') : '' }}" readonly required>
                     @if ($errors->has('abono_mensual')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('abono_mensual') }}</li></ul> @endif
                   </div>
                 </div>
@@ -111,7 +111,7 @@
                   <label class="control-label col-md-3 col-sm-3 col-xs-12" for="abono_proporcional">Abono Proporcional</label>
                   <div class="col-md-6 col-sm-6 col-xs-12">
                     <div class="input-group">
-                      <input type="text" id="abono_proporcional" name="abono_proporcional" class="form-control col-md-7 col-xs-12 @if ($errors->has('abono_proporcional')) parsley-error @endif" value="{{ old('abono_proporcional') ? old('abono_proporcional') : '' }}" >
+                      <input type="text" id="abono_proporcional" name="abono_proporcional" class="form-control col-md-7 col-xs-12 @if ($errors->has('abono_proporcional')) parsley-error @endif" value="{{ old('abono_proporcional') ? old('abono_proporcional') : '' }}" readonly>
                       <span class="input-group-addon" id="abono_proporcional_sugerido">Importe Sugerido</span>
                     </div>
                     @if ($errors->has('abono_proporcional')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('abono_proporcional') }}</li></ul> @endif
@@ -121,7 +121,7 @@
                 <div class="form-group">
                   <label class="control-label col-md-3 col-sm-3 col-xs-12" for="costo_instalacion">Costo de Instalación <span class="required">*</span></label>
                   <div class="col-md-6 col-sm-6 col-xs-12">
-                    <input type="text" id="costo_instalacion" name="costo_instalacion" costo_instalacion_base="" class="form-control col-md-7 col-xs-12 @if ($errors->has('costo_instalacion')) parsley-error @endif" value="{{ old('costo_instalacion') ? old('costo_instalacion') : '' }}" required>
+                    <input type="text" id="costo_instalacion" name="costo_instalacion" costo_instalacion_base="" class="form-control col-md-7 col-xs-12 @if ($errors->has('costo_instalacion')) parsley-error @endif" value="{{ old('costo_instalacion') ? old('costo_instalacion') : '' }}" readonly required>
                     @if ($errors->has('costo_instalacion')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('costo_instalacion') }}</li></ul> @endif
                   </div>
                 </div>

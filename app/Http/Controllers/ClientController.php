@@ -1479,9 +1479,9 @@ class ClientController extends Controller
             'contrato_fecha'    => 'required|date_format:d/m/Y',
             'alta_servicio'     => 'required|date_format:d/m/Y',
             // 'mes_alta'          => 'required',
-            'abono_mensual'     => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
-            'abono_proporcional' => ['regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
-            'costo_instalacion' => ['regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],           
+            'abono_mensual'     => 'required|numeric',
+            'abono_proporcional' => 'nullable|numeric',
+            'costo_instalacion' => 'nullable|numeric',           
             );
 
         $validator = Validator::make($request->all(), $rules);
