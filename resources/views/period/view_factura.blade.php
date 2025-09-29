@@ -156,14 +156,14 @@
                     <td>{{ \Carbon\Carbon::parse($nota->created_at)->format('d/m/Y H:i') }}</td>
                     <td>{{ $nota->talonario->letra }} {{ $nota->talonario->nro_punto_vta }}-{{ str_pad($nota->nro_nota_credito, 8, '0', STR_PAD_LEFT) }}</td>
                     <td>{{ $nota->motivo }}</td>
-                    <td class="text-right">${{ number_format($nota->importe_bonificacion, 2) }}</td>
+                    <td class="text-right">${{ number_format($nota->importe_bonificacion, 2, ',', '.') }}</td>
                   </tr>
                   @endforeach
                 </tbody>
                 <tfoot>
                   <tr>
                     <th colspan="3" class="text-right"><strong>Total Bonificaciones:</strong></th>
-                    <th class="text-right"><strong>${{ number_format($notasCredito->sum('importe_bonificacion'), 2) }}</strong></th>
+                    <th class="text-right"><strong>${{ number_format($notasCredito->sum('importe_bonificacion'), 2, ',', '.') }}</strong></th>
                   </tr>
                 </tfoot>
               </table>
@@ -197,7 +197,7 @@
                                     
                                     <tr>
                                         <td scope="row">Convenio de Pago - Servicio {{$detalle->servicio->nombre}}  (Cuota {{$detalle->instalacion_cuota.'/'.$detalle->instalacion_plan_pago}})</td>   
-                                        <td class="right"><input type="text" field_type="instalacion_fila" proporcional="0" id="{{$detalle->id}}" value="{{number_format($detalle->costo_instalacion, 2, '.', '')}}" class="factura_input_edit factura_fila_importe allownumericwithdecimal col-md-3 col-sm-3 col-xs-12"> </td>  
+                                        <td class="right"><input type="text" field_type="instalacion_fila" proporcional="0" id="{{$detalle->id}}" value="{{number_format($detalle->costo_instalacion, 2, ',', '.')}}" class="factura_input_edit factura_fila_importe allownumericwithdecimal col-md-3 col-sm-3 col-xs-12"> </td>  
                                     </tr>
 
                             <?php endif; ?>  
@@ -217,13 +217,13 @@
 
                             <tr>
                                 <td scope="row">{{$fila_detalle}}</td>   
-                                <td class="right"><input type="text" field_type="importe_fila" proporcional="{{$proporcional}}" id="{{$detalle->id}}" value="{{number_format($fila_importe, 2, '.', '')}}" class="factura_input_edit factura_fila_importe allownumericwithdecimal col-md-3 col-sm-3 col-xs-12"></td>   
+                                <td class="right"><input type="text" field_type="importe_fila" proporcional="{{$proporcional}}" id="{{$detalle->id}}" value="{{number_format($fila_importe, 2, ',', '.')}}" class="factura_input_edit factura_fila_importe allownumericwithdecimal col-md-3 col-sm-3 col-xs-12"></td>   
                             </tr>
 
                             <?php if ($detalle->instalacion_cuota != null && $detalle->instalacion_cuota <= $detalle->instalacion_plan_pago): ?>
                                     <tr>
                                         <td scope="row"> *Costo de Instalación (Cuota {{$detalle->instalacion_cuota.'/'.$detalle->instalacion_plan_pago}})</td>   
-                                        <td class="right"><input type="text" field_type="instalacion_fila" proporcional="0" id="{{$detalle->id}}" value="{{number_format($detalle->costo_instalacion, 2, '.', '')}}" class="factura_input_edit factura_fila_importe allownumericwithdecimal col-md-3 col-sm-3 col-xs-12"> </td>  
+                                        <td class="right"><input type="text" field_type="instalacion_fila" proporcional="0" id="{{$detalle->id}}" value="{{number_format($detalle->costo_instalacion, 2, ',', '.')}}" class="factura_input_edit factura_fila_importe allownumericwithdecimal col-md-3 col-sm-3 col-xs-12"> </td>  
                                     </tr>
                             <?php endif; ?> 
   

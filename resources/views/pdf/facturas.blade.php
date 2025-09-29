@@ -227,8 +227,10 @@
                 // Si ya es numérico, retornar directamente
                 if (is_numeric($value)) return floatval($value);
                 
-                // Limpiar comas y espacios, luego convertir a float
-                $cleaned = str_replace(',', '', trim($value));
+                // Convertir formato "1.234,56" a "1234.56"
+                // Primero eliminar puntos (separadores de miles), luego convertir coma a punto
+                $cleaned = str_replace('.', '', trim($value));
+                $cleaned = str_replace(',', '.', $cleaned);
                 return floatval($cleaned);
             }
         }
@@ -237,7 +239,7 @@
         if (!function_exists('safe_number_format')) {
             function safe_number_format($value, $decimals = 2) {
                 $num = clean_number($value);
-                return number_format($num, $decimals);
+                return number_format($num, $decimals, ',', '.');
             }
         }
     ?>

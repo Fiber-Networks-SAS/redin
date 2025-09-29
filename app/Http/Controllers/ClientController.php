@@ -1479,9 +1479,9 @@ class ClientController extends Controller
             'contrato_fecha'    => 'required|date_format:d/m/Y',
             'alta_servicio'     => 'required|date_format:d/m/Y',
             // 'mes_alta'          => 'required',
-            'abono_mensual'     => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:,?\d{3})*)(?:\.\d+)?$/'],
-            'abono_proporcional' => ['regex:/^-?(?:0|[1-9]\d{0,2}(?:,?\d{3})*)(?:\.\d+)?$/'],
-            'costo_instalacion' => ['regex:/^-?(?:0|[1-9]\d{0,2}(?:,?\d{3})*)(?:\.\d+)?$/'],           
+            'abono_mensual'     => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
+            'abono_proporcional' => ['regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
+            'costo_instalacion' => ['regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],           
             );
 
         $validator = Validator::make($request->all(), $rules);
@@ -1790,9 +1790,9 @@ class ClientController extends Controller
             'contrato_fecha'    => 'required|date_format:d/m/Y',
             'alta_servicio'     => 'required|date_format:d/m/Y',
             // 'mes_alta'          => 'required',
-            'abono_mensual'     => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:,?\d{3})*)(?:\.\d+)?$/'],
-            'abono_proporcional'=> ['regex:/^-?(?:0|[1-9]\d{0,2}(?:,?\d{3})*)(?:\.\d+)?$/'],
-            'costo_instalacion' => ['regex:/^-?(?:0|[1-9]\d{0,2}(?:,?\d{3})*)(?:\.\d+)?$/'],           
+            'abono_mensual'     => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
+            'abono_proporcional'=> ['regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
+            'costo_instalacion' => ['regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],           
             );
 
         $validator = Validator::make($request->all(), $rules);
@@ -1896,8 +1896,8 @@ class ClientController extends Controller
             'pp_cuotas_adeudadas' => 'required|numeric',
             'pp_plan_pago'        => 'required|numeric',
             'pp_tasa'             => 'required|numeric',
-            'abono_mensual'       => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:,?\d{3})*)(?:\.\d+)?$/'],
-            'abono_mensual_pagar' => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:,?\d{3})*)(?:\.\d+)?$/'],
+            'abono_mensual'       => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
+            'abono_mensual_pagar' => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
             );
 
         $validator = Validator::make($request->all(), $rules);
@@ -2063,8 +2063,8 @@ class ClientController extends Controller
             'pp_cuotas_adeudadas' => 'required|numeric',
             'pp_plan_pago'        => 'required|numeric',
             'pp_tasa'             => 'required|numeric',
-            'abono_mensual'       => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:,?\d{3})*)(?:\.\d+)?$/'],
-            'abono_mensual_pagar' => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:,?\d{3})*)(?:\.\d+)?$/'],
+            'abono_mensual'       => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
+            'abono_mensual_pagar' => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
             );
 
         $validator = Validator::make($request->all(), $rules);

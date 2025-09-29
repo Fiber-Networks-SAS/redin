@@ -97,7 +97,7 @@
                       @foreach($detalles as $detalle)
                       <tr>
                         <td>{{$detalle->servicio->nombre ?? 'N/A'}}</td>
-                        <td>${{number_format($detalle->importe, 2)}}</td>
+                        <td>${{number_format($detalle->importe, 2, ',', '.')}}</td>
                       </tr>
                       @endforeach
                     </tbody>
@@ -125,7 +125,7 @@
                       <tr>
                         <td>{{$nota->talonario->letra}} {{$nota->talonario->nro_punto_vta}}-{{str_pad($nota->nro_nota_credito, 8, '0', STR_PAD_LEFT)}}</td>
                         <td>{{\Carbon\Carbon::parse($nota->fecha_emision)->format('d/m/Y')}}</td>
-                        <td>${{number_format($nota->importe_bonificacion, 2)}}</td>
+                        <td>${{number_format($nota->importe_bonificacion, 2, ',', '.')}}</td>
                         <td>{{$nota->cae}}</td>
                         <td>{{\Carbon\Carbon::parse($nota->cae_vto)->format('d/m/Y')}}</td>
                         <td>{{$nota->motivo}}</td>

@@ -328,9 +328,9 @@ class BillController extends Controller
             $fecha_actual = Carbon::now();
 
             $factura->fecha_emision         = $fecha_actual; // actualizo la fecha de emision.
-            $factura->importe_bonificacion  = $this->floatvalue(number_format($request->importe_bonificacion, 2));
-            $factura->importe_subtotal      = $this->floatvalue(number_format($request->importe_subtotal, 2));
-            $factura->importe_total         = $this->floatvalue(number_format($request->importe_total, 2));
+            $factura->importe_bonificacion  = $this->floatvalue($request->importe_bonificacion);
+            $factura->importe_subtotal      = $this->floatvalue($request->importe_subtotal);
+            $factura->importe_total         = $this->floatvalue($request->importe_total);
             $factura->primer_vto_codigo     = $this->getCodigoPago($factura->importe_total, $factura->primer_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
             $factura->segundo_vto_importe   = $this->getImporteConTasaInteres($factura->importe_total, $interes->segundo_vto_tasa);
             $factura->segundo_vto_codigo    = $this->getCodigoPago($factura->segundo_vto_importe, $factura->segundo_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
@@ -443,7 +443,7 @@ class BillController extends Controller
 
         //-- VALIDATOR START --//
         $rules = array(
-            'importe_bonificacion'      => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:,?\d{3})*)(?:\.\d+)?$/'],
+            'importe_bonificacion'      => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
         );
 
         $validator = Validator::make($request->all(), $rules);
@@ -470,8 +470,8 @@ class BillController extends Controller
             $fecha_actual = Carbon::now();
 
             $factura->fecha_emision         = $fecha_actual; // actualizo la fecha de emision.
-            $factura->importe_bonificacion  += $this->floatvalue(number_format($request->importe_bonificacion, 2));
-            $factura->importe_total         = $this->floatvalue(number_format($factura->importe_subtotal - $factura->importe_bonificacion, 2));
+            $factura->importe_bonificacion  += $this->floatvalue($request->importe_bonificacion);
+            $factura->importe_total         = $this->floatvalue($factura->importe_subtotal - $factura->importe_bonificacion);
             $factura->primer_vto_codigo     = $this->getCodigoPago($factura->importe_total, $factura->primer_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
             $factura->segundo_vto_importe   = $this->getImporteConTasaInteres($factura->importe_total, $interes->segundo_vto_tasa);
             $factura->segundo_vto_codigo    = $this->getCodigoPago($factura->segundo_vto_importe, $factura->segundo_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
@@ -667,7 +667,7 @@ class BillController extends Controller
         // $factura->primer_vto_fecha = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
         // $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
 
-        $factura->importe_subtotal = number_format($factura->importe_subtotal, 2);
+        $factura->importe_subtotal = number_format($factura->importe_subtotal, 2, ',', '.');
         // $factura->importe_bonificacion = number_format($factura->importe_bonificacion, 2); 
         // $factura->importe_total = number_format($factura->importe_total, 2); 
         // $factura->segundo_vto_importe = number_format($factura->segundo_vto_importe, 2); 
@@ -799,7 +799,7 @@ class BillController extends Controller
         //-- VALIDATOR START --//
         $rules = array(
             'fecha_pago'    => 'required|date_format:d/m/Y',
-            'importe_pago' => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:,?\d{3})*)(?:\.\d+)?$/'],
+            'importe_pago' => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
             'forma_pago'    => 'required',
 
         );
