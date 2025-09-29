@@ -17,16 +17,20 @@ class Factura extends Model implements AuditableContract
 	// define la tabla a utilizar
 	protected $table = 'facturas';
 	// define que todos los campos permiten entrada
-	protected $fillable = [];
+	protected $fillable = [
+        'cae',
+        'cae_vto',
+    ];
     //agregar casteos
-//     protected $casts = [
-//     'importe_total' => 'float',
-//     'importe_subtotal' => 'float',
-//     'importe_subtotal_iva' => 'float',
-//     'importe_iva' => 'float',
-//     'importe_bonificacion' => 'float',
-//     'importe_bonificacion_iva' => 'float',
-// ];
+    protected $casts = [
+        'importe_total' => 'float',
+        'importe_subtotal' => 'float',
+        'importe_subtotal_iva' => 'float',
+        'importe_iva' => 'float',
+        'importe_bonificacion' => 'float',
+        'importe_bonificacion_iva' => 'float',
+        'cae_vto' => 'date',
+    ];
 	
 	// crea el los campos created_at y updated_at
 	public $timestamps = false;
@@ -59,6 +63,17 @@ class Factura extends Model implements AuditableContract
         return $this->paymentPreferences()
             ->where('vencimiento_tipo', $vencimientoTipo)
             ->where('status', '!=', 'cancelled')
+            ->orderBy('created_at', 'desc')
             ->first();
+    }
+
+    public function notaCredito()
+    {
+        return $this->hasMany('App\NotaCredito', 'factura_id');
+    }
+
+    public function bonificacionesPuntuales()
+    {
+        return $this->hasMany('App\BonificacionPuntual', 'factura_id');
     }
 }

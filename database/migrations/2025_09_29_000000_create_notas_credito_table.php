@@ -38,6 +38,10 @@ class CreateNotasCreditoTable extends Migration
             // Motivo de la bonificación
             $table->text('motivo')->nullable();
 
+            // Campos adicionales
+            $table->integer('nro_cliente')->nullable();
+            $table->string('periodo')->nullable();
+
             $table->timestamps();
         });
     }

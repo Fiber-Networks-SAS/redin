@@ -336,14 +336,22 @@
 
                                     <tr>
                                         <td class="detalle_row" colspan="5">
-                                            
+                                            {{-- Abono Proporcional --}}
                                             <?php 
                                                 if(!is_null($detalle->abono_proporcional)){
                                                     $label_dia = $detalle->dias_proporcional == 1 ? ' día' : ' días';
-                                                    $fila_detalle = $detalle->servicio->nombre . ' (Abono proporcional correspondiente a '. $detalle->dias_proporcional . $label_dia .' de servicio)';
+                                                    if ($detalle->servicio) {
+                                                        $fila_detalle = $detalle->servicio->nombre . ' (Abono proporcional correspondiente a '. $detalle->dias_proporcional . $label_dia .' de servicio)';
+                                                    } else {
+                                                        $fila_detalle = $detalle->bonificacion_detalle . ' (Abono proporcional correspondiente a '. $detalle->dias_proporcional . $label_dia .' de servicio)';
+                                                    }
                                                     $fila_importe = $detalle->abono_proporcional;
                                                 } else {
-                                                    $fila_detalle = $detalle->servicio->nombre;
+                                                    if ($detalle->servicio) {
+                                                        $fila_detalle = $detalle->servicio->nombre;
+                                                    } else {
+                                                        $fila_detalle = $detalle->bonificacion_detalle;
+                                                    }
                                                     $fila_importe = $detalle->abono_mensual;
                                                 }
                                                 
@@ -351,7 +359,7 @@
                                                 $importe_neto = clean_number($fila_importe) - (clean_number($fila_importe) * 0.21);
                                                 $importe_iva = clean_number($fila_importe) * 0.21;
                                             ?>
-
+                                            {{-- Normal --}}
                                             <tr>
                                                 <td class="left">{{$fila_detalle}}</td>
                                                 <td class="right">{{ safe_number_format($importe_neto) }}</td>   
@@ -359,8 +367,8 @@
                                                 <td class="right">{{ safe_number_format($importe_iva) }}</td>   
                                                 <td class="right">{{ safe_number_format($fila_importe) }}</td>   
                                             </tr>
-
-                                            <?php if ($detalle->bonificacion_detalle != null): ?>
+                                            {{-- bonificacion --}}
+                                            <?php if ($detalle->bonificacion_detalle != null && $detalle->importe_bonificacion > 0): ?>
                                                 <?php
                                                     // Calcular Neto e IVA para bonificación
                                                     $bonif_neto = clean_number($detalle->importe_bonificacion) * 0.79;
@@ -374,7 +382,7 @@
                                                     <td class="right">-{{ safe_number_format($detalle->importe_bonificacion) }}</td>
                                                 </tr>
                                             <?php endif; ?>
-
+                                            {{-- Instalación --}}
                                             <?php if ($detalle->instalacion_cuota != null && $detalle->instalacion_cuota <= $detalle->instalacion_plan_pago): ?>
                                                     <tr>
                                                         <td class="left"> *Costo de Instalación (Cuota {{$detalle->instalacion_cuota.'/'.$detalle->instalacion_plan_pago}})</td>
@@ -391,6 +399,21 @@
                             <?php endif; ?>
                                  
                         <?php endforeach; ?>
+
+                        {{-- Bonificaciones Puntuales --}}
+                        @foreach($factura->bonificacionesPuntuales as $bonificacion)
+                        <tr>
+                            <td class="detalle_row" colspan="5">
+                                <tr>
+                                    <td class="left">Bonificación: {{ $bonificacion->descripcion }}</td>
+                                    <td class="right">-{{ safe_number_format($bonificacion->importe * 0.79) }}</td>
+                                    <td class="right">21%</td>
+                                    <td class="right">-{{ safe_number_format($bonificacion->importe * 0.21) }}</td>
+                                    <td class="right">-{{ safe_number_format($bonificacion->importe) }}</td>
+                                </tr>
+                            </td>
+                        </tr>
+                        @endforeach
 
                     </tbody>
                     
@@ -484,18 +507,6 @@
                 <p>{{ config('constants.company_web') }}</p>        
                 <p>Tel.: {{ config('constants.company_tel') }}</p>
                 <p>{{ config('constants.account_info') }}</p>
-
-                @if($factura->notaCredito)
-                <div style="border: 1px solid #000; padding: 10px; margin-top: 20px;">
-                    <h4 style="color: #FF0000;">NOTA DE CRÉDITO</h4>
-                    <p><strong>Número de Nota de Crédito:</strong> {{ $factura->notaCredito->talonario->letra }} {{ $factura->notaCredito->talonario->nro_punto_vta }}-{{ str_pad($factura->notaCredito->nro_nota_credito, 8, '0', STR_PAD_LEFT) }}</p>
-                    <p><strong>Fecha de Emisión:</strong> {{ \Carbon\Carbon::parse($factura->notaCredito->fecha_emision)->format('d/m/Y') }}</p>
-                    <p><strong>Importe Bonificación:</strong> ${{ number_format($factura->notaCredito->importe_bonificacion, 2) }}</p>
-                    <p><strong>CAE:</strong> {{ $factura->notaCredito->cae }}</p>
-                    <p><strong>Vencimiento CAE:</strong> {{ \Carbon\Carbon::parse($factura->notaCredito->cae_vto)->format('d/m/Y') }}</p>
-                    <p><strong>Motivo:</strong> {{ $factura->notaCredito->motivo }}</p>
-                </div>
-                @endif
             </div>
         </div>
 

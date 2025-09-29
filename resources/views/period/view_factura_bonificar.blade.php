@@ -40,6 +40,103 @@
 
             <div class="x_content">
 
+              <div class="row">
+                <div class="col-md-6">
+                  <h4>Información de la Factura</h4>
+                  <table class="table table-striped">
+                    <tr>
+                      <th>Número:</th>
+                      <td>{{$factura->talonario->letra}} {{$factura->talonario->nro_punto_vta}} - {{$factura->nro_factura}}</td>
+                    </tr>
+                    <tr>
+                      <th>Cliente:</th>
+                      <td>{{$factura->cliente->firstname.' '.$factura->cliente->lastname}}</td>
+                    </tr>
+                    <tr>
+                      <th>Fecha de Emisión:</th>
+                      <td>{{$factura->fecha_emision}}</td>
+                    </tr>
+                    <tr>
+                      <th>Primer Vencimiento:</th>
+                      <td>{{$factura->primer_vto_fecha}}</td>
+                    </tr>
+                    <tr>
+                      <th>Segundo Vencimiento:</th>
+                      <td>{{$factura->segundo_vto_fecha}}</td>
+                    </tr>
+                    <tr>
+                      <th>Subtotal:</th>
+                      <td>${{$factura->importe_subtotal}}</td>
+                    </tr>
+                    <tr>
+                      <th>Bonificación Actual:</th>
+                      <td>${{$factura->importe_bonificacion}}</td>
+                    </tr>
+                    <tr>
+                      <th>Total Actual:</th>
+                      <td>${{$factura->importe_total}}</td>
+                    </tr>
+                    @if($factura->fecha_pago)
+                    <tr>
+                      <th>Fecha de Pago:</th>
+                      <td>{{$factura->fecha_pago}}</td>
+                    </tr>
+                    @endif
+                  </table>
+                </div>
+                <div class="col-md-6">
+                  <h4>Detalles de Servicios</h4>
+                  <table class="table table-striped">
+                    <thead>
+                      <tr>
+                        <th>Servicio</th>
+                        <th>Importe</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @foreach($detalles as $detalle)
+                      <tr>
+                        <td>{{$detalle->servicio->nombre ?? 'N/A'}}</td>
+                        <td>${{number_format($detalle->importe, 2)}}</td>
+                      </tr>
+                      @endforeach
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              @if($notasCredito->count() > 0)
+              <div class="row">
+                <div class="col-md-12">
+                  <h4>Notas de Crédito Generadas</h4>
+                  <table class="table table-striped">
+                    <thead>
+                      <tr>
+                        <th>Número</th>
+                        <th>Fecha</th>
+                        <th>Importe Bonificación</th>
+                        <th>CAE</th>
+                        <th>Vencimiento CAE</th>
+                        <th>Motivo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @foreach($notasCredito as $nota)
+                      <tr>
+                        <td>{{$nota->talonario->letra}} {{$nota->talonario->nro_punto_vta}}-{{str_pad($nota->nro_nota_credito, 8, '0', STR_PAD_LEFT)}}</td>
+                        <td>{{\Carbon\Carbon::parse($nota->fecha_emision)->format('d/m/Y')}}</td>
+                        <td>${{number_format($nota->importe_bonificacion, 2)}}</td>
+                        <td>{{$nota->cae}}</td>
+                        <td>{{\Carbon\Carbon::parse($nota->cae_vto)->format('d/m/Y')}}</td>
+                        <td>{{$nota->motivo}}</td>
+                      </tr>
+                      @endforeach
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              @endif
+
               <form action="/admin/period/bill-improve/{{$factura->id}}" method="POST" class="form-horizontal form-label-left" enctype="multipart/form-data">
 
                 {{ csrf_field() }}
@@ -49,7 +146,21 @@
                 <div class="form-group">
                   <label class="control-label col-md-3 col-sm-3 col-xs-12" for="importe_bonificacion">Subtotal</label>
                   <div class="col-md-6 col-sm-6 col-xs-12">
-                  <h4>{{$factura->importe_subtotal}}</h4>
+                  <h4>${{$factura->importe_subtotal}}</h4>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="control-label col-md-3 col-sm-3 col-xs-12" for="importe_bonificacion">Bonificación Actual</label>
+                  <div class="col-md-6 col-sm-6 col-xs-12">
+                  <h4>${{$factura->importe_bonificacion}}</h4>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="control-label col-md-3 col-sm-3 col-xs-12" for="importe_bonificacion">Total Actual</label>
+                  <div class="col-md-6 col-sm-6 col-xs-12">
+                  <h4>${{$factura->importe_total}}</h4>
                   </div>
                 </div>
 

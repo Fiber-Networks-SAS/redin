@@ -32,6 +32,9 @@ class PaymentQRService
     public function createPaymentQR(Factura $factura, $vencimientoTipo)
     {
         try {
+            // Cancelar preferencias anteriores para este vencimiento
+            $this->cancelExistingPreferences($factura->id, $vencimientoTipo);
+
             // Obtener datos del vencimiento según el tipo
             $paymentData = $this->getPaymentDataForVencimiento($factura, $vencimientoTipo);
             
@@ -92,6 +95,35 @@ class PaymentQRService
             return config('constants.account_no_reply', 'administracion@redin.com.ar');
         } catch (Exception $e) {
             return 'administracion@redin.com.ar';
+        }
+    }
+
+    /**
+     * Cancelar preferencias existentes para un vencimiento específico
+     *
+     * @param int $facturaId
+     * @param string $vencimientoTipo
+     */
+    protected function cancelExistingPreferences($facturaId, $vencimientoTipo)
+    {
+        try {
+            $existingPreferences = PaymentPreference::where('factura_id', $facturaId)
+                ->where('vencimiento_tipo', $vencimientoTipo)
+                ->where('status', '!=', 'cancelled')
+                ->get();
+
+            foreach ($existingPreferences as $preference) {
+                $this->cancelPaymentPreference($preference);
+            }
+
+            Log::info('Preferencias existentes canceladas', [
+                'factura_id' => $facturaId,
+                'vencimiento_tipo' => $vencimientoTipo,
+                'cantidad_canceladas' => $existingPreferences->count()
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('Error cancelando preferencias existentes: ' . $e->getMessage());
         }
     }
 

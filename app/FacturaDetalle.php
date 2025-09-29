@@ -18,7 +18,21 @@ class FacturaDetalle extends Model implements AuditableContract
 	protected $table = 'facturas_detalle';
 
 	// define que todos los campos permiten entrada
-	protected $fillable = [];
+	protected $fillable = [
+		'factura_id',
+		'servicio_id',
+		'abono_mensual',
+		'abono_proporcional',
+		'dias_proporcional',
+		'costo_instalacion',
+		'instalacion_cuota',
+		'instalacion_plan_pago',
+		'iva_bonificacion',
+		'importe_bonificacion',
+		'bonificacion_detalle',
+		'importe_iva',
+		'pp_flag'
+	];
 
 	//agregar casteos
 	// protected $casts = [

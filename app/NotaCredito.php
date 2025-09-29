@@ -22,7 +22,9 @@ class NotaCredito extends Model implements AuditableContract
         'cae',
         'cae_vto',
         'fecha_emision',
-        'motivo'
+        'motivo',
+        'nro_cliente',
+        'periodo'
     ];
 
     protected $dates = [

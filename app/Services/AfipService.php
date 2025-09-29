@@ -25,7 +25,16 @@ class AfipService
      */
     private function createVoucher(array $data)
     {
-        return $this->afip->ElectronicBilling->CreateVoucher($data);
+        \Log::info('AFIP - Enviando datos para crear voucher', $data);
+        try {
+            $result = $this->afip->ElectronicBilling->CreateVoucher($data);
+            \Log::info('AFIP - Respuesta completa del voucher', $result);
+            return $result;
+        } catch (\Exception $e) {
+            \Log::error('AFIP - Error al crear voucher: ' . $e->getMessage());
+            \Log::error('AFIP - Datos enviados que causaron el error', $data);
+            throw $e;
+        }
     }
 
     /**
@@ -143,6 +152,7 @@ class AfipService
             'ImpTrib'   => 0,
             'MonId'     => 'PES',
             'MonCotiz'  => 1,
+            'CondicionIVAReceptorId' => 1, // Responsable Inscripto
             'Iva'       => [
                 [
                     'Id'      => 5,
@@ -187,6 +197,7 @@ class AfipService
             'ImpTrib'   => 0,
             'MonId'     => 'PES',
             'MonCotiz'  => 1,
+            'CondicionIVAReceptorId' => 4, // Consumidor Final
             'Iva'       => [
                 [
                     'Id'      => 5,
