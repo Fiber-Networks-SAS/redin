@@ -1022,3 +1022,10 @@ ul.address {
   text-align: justify;
   margin-bottom: 50px;
 }
+#features .company .title{
+  text-align: center;
+  font-size: 24px;
+  font-weight: bold;
+  font-style: italic;
+  margin-bottom: 50px;
+}
