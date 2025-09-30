@@ -504,7 +504,7 @@ class BillController extends Controller
                     if ($factura->talonario->letra == 'A') {
                         $afipResponse = $this->afipService->notaCreditoA(
                             $factura->talonario->nro_punto_vta,
-                            $factura->cliente->cuit,
+                            $factura->cliente->dni,
                             $this->floatvalue($request->importe_bonificacion),
                             $factura->nro_factura
                         );
@@ -1171,7 +1171,7 @@ class BillController extends Controller
                         if ($talonario->letra == 'A') {
                             $afipResponse = $this->afipService->facturaA(
                                 $talonario->nro_punto_vta,
-                                $item['cliente']->cuit,
+                                $item['cliente']->dni,
                                 $factura->importe_total
                             );
                         } else {
@@ -2750,7 +2750,7 @@ class BillController extends Controller
                         if ($talonario->letra == 'A') {
                             $afipResponse = $this->afipService->facturaA(
                                 $talonario->nro_punto_vta,
-                                $item['cliente']->cuit,
+                                $item['cliente']->dni,
                                 $factura->importe_total
                             );
                         } else {

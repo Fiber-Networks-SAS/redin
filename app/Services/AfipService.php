@@ -50,11 +50,30 @@ class AfipService
      */
     public function facturaA($ptoVta, $cuitCliente, $importe)
     {
+        if (empty($cuitCliente)) {
+            throw new \Exception('El CUIT del cliente es requerido para emitir Factura A');
+        }
+
+        \Log::info('AFIP - Iniciando creación de Factura A', [
+            'ptoVta' => $ptoVta,
+            'cuitCliente' => $cuitCliente,
+            'importe' => $importe
+        ]);
+
         $lastVoucher = $this->getLastVoucher($ptoVta, 1);
+        \Log::info('AFIP - Último voucher obtenido para Factura A', ['lastVoucher' => $lastVoucher]);
+
         $importeTotal = round($importe, 2);
         $importeNeto = round($importe / 1.21, 2);
         $importeIVA = round($importeTotal - $importeNeto, 2);
         $baseImponibleIVA = round($importeTotal, 2);
+
+        \Log::info('AFIP - Cálculos de importes para Factura A', [
+            'importeTotal' => $importeTotal,
+            'importeNeto' => $importeNeto,
+            'importeIVA' => $importeIVA
+        ]);
+
         $data = [
             'CantReg'   => 1,
             'PtoVta'    => $ptoVta,
@@ -86,7 +105,13 @@ class AfipService
             ],
         ];
 
-        return $this->createVoucher($data);
+        \Log::info('AFIP - Datos preparados para Factura A', $data);
+
+        $result = $this->createVoucher($data);
+
+        \Log::info('AFIP - Resultado de creación de Factura A', $result);
+
+        return $result;
     }
 
     /**
