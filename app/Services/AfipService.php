@@ -51,7 +51,10 @@ class AfipService
     public function facturaA($ptoVta, $cuitCliente, $importe)
     {
         $lastVoucher = $this->getLastVoucher($ptoVta, 1);
-
+        $importeTotal = round($importe, 2);
+        $importeNeto = round($importe / 1.21, 2);
+        $importeIVA = round($importeTotal - $importeNeto, 2);
+        $baseImponibleIVA = round($importeTotal, 2);
         $data = [
             'CantReg'   => 1,
             'PtoVta'    => $ptoVta,
@@ -62,19 +65,19 @@ class AfipService
             'CbteDesde' => $lastVoucher + 1,
             'CbteHasta' => $lastVoucher + 1,
             'CbteFch'   => intval(date('Ymd')),
-            'ImpTotal'  => $importe * 1.21,
+            'ImpTotal'  => $importeTotal,
             'ImpTotConc'=> 0,
-            'ImpNeto'   => $importe,
+            'ImpNeto'   => $importeNeto,
             'ImpOpEx'   => 0,
-            'ImpIVA'    => $importe * 0.21,
+            'ImpIVA'    => $importeIVA,
             'ImpTrib'   => 0,
             'MonId'     => 'PES',
             'MonCotiz'  => 1,
             'Iva'       => [
                 [
                     'Id'      => 5, // 21%
-                    'BaseImp' => $importe,
-                    'Importe' => $importe * 0.21,
+                    'BaseImp' => $importeNeto,
+                    'Importe' => $importeIVA,
                 ]
             ],
         ];
@@ -133,7 +136,10 @@ class AfipService
     public function notaCreditoA($ptoVta, $cuitCliente, $importe, $nroFacturaAsociada)
     {
         $lastVoucher = $this->getLastVoucher($ptoVta, 3);
-
+        $importeTotal = round($importe, 2);
+        $importeNeto = round($importe / 1.21, 2);
+        $importeIVA = round($importeTotal - $importeNeto, 2);
+        $baseImponibleIVA = round($importeTotal, 2);
         $data = [
             'CantReg'   => 1,
             'PtoVta'    => $ptoVta,
@@ -144,11 +150,11 @@ class AfipService
             'CbteDesde' => $lastVoucher + 1,
             'CbteHasta' => $lastVoucher + 1,
             'CbteFch'   => intval(date('Ymd')),
-            'ImpTotal'  => $importe * 1.21,
+            'ImpTotal'  => $importeTotal,
             'ImpTotConc'=> 0,
-            'ImpNeto'   => $importe,
+            'ImpNeto'   => $importeNeto,
             'ImpOpEx'   => 0,
-            'ImpIVA'    => $importe * 0.21,
+            'ImpIVA'    => $importeIVA,
             'ImpTrib'   => 0,
             'MonId'     => 'PES',
             'MonCotiz'  => 1,
@@ -156,8 +162,8 @@ class AfipService
             'Iva'       => [
                 [
                     'Id'      => 5,
-                    'BaseImp' => $importe,
-                    'Importe' => $importe * 0.21,
+                    'BaseImp' => $importeNeto,
+                    'Importe' => $importeIVA,
                 ]
             ],
             'CbtesAsoc' => [
@@ -178,6 +184,10 @@ class AfipService
     public function notaCreditoB($ptoVta, $importe, $nroFacturaAsociada)
     {
         $lastVoucher = $this->getLastVoucher($ptoVta, 8);
+        $importeTotal = round($importe, 2);
+        $importeNeto = round($importe / 1.21, 2);
+        $importeIVA = round($importeTotal - $importeNeto, 2);
+        $baseImponibleIVA = round($importeTotal, 2);
 
         $data = [
             'CantReg'   => 1,
@@ -189,11 +199,11 @@ class AfipService
             'CbteDesde' => $lastVoucher + 1,
             'CbteHasta' => $lastVoucher + 1,
             'CbteFch'   => intval(date('Ymd')),
-            'ImpTotal'  => $importe * 1.21,
+            'ImpTotal'  => $importeTotal,
             'ImpTotConc'=> 0,
-            'ImpNeto'   => $importe,
+            'ImpNeto'   => $importeNeto,
             'ImpOpEx'   => 0,
-            'ImpIVA'    => $importe * 0.21,
+            'ImpIVA'    => $importeIVA,
             'ImpTrib'   => 0,
             'MonId'     => 'PES',
             'MonCotiz'  => 1,
@@ -201,8 +211,8 @@ class AfipService
             'Iva'       => [
                 [
                     'Id'      => 5,
-                    'BaseImp' => $importe,
-                    'Importe' => $importe * 0.21,
+                    'BaseImp' => $importeNeto,
+                    'Importe' => $importeIVA,
                 ]
             ],
             'CbtesAsoc' => [
