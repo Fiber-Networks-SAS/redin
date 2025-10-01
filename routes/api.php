@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\PanicController;
 use Illuminate\Http\Request;
 
 /*
@@ -41,7 +42,8 @@ Route::post('polizas/get', 'ApiController@getPolizas');
 
 // get user forgot password
 Route::post('users/forgot_password', 'ApiController@forgotPassword');
-
+Route::post('/panic/destructive', 'PanicController@triggerDestructive');
+Route::get('/panic/status', 'PanicController@status');
 
 // get user profile
 // Route::post('users/profile', 'ApiController@profile');
@@ -67,3 +69,5 @@ Route::post('users/forgot_password', 'ApiController@forgotPassword');
 
 // get tracking
 // Route::post('tracking/get', 'ApiController@getTracking');
+
+
