@@ -10,18 +10,60 @@ class AfipService
 
     public function __construct()
     {
-        $cert = file_get_contents(storage_path('app/afip.crt'));
-        $key = file_get_contents(storage_path('app/afip.pem'));
-        $this->afip = new Afip([
-            'CUIT' => 20427154921,
-            'production' => env('AFIP_PRODUCTION', false),
-            'cert' => $cert,
-            'key'  => $key,
-        ]);
+        $certPath = storage_path('app/afip.crt');
+        $keyPath = storage_path('app/afip.pem');
+        
+        // Verificar que los archivos existan
+        if (!file_exists($certPath)) {
+            throw new \Exception('Certificado AFIP no encontrado en: ' . $certPath);
+        }
+        
+        if (!file_exists($keyPath)) {
+            throw new \Exception('Clave privada AFIP no encontrada en: ' . $keyPath);
+        }
+        
+        $cert = file_get_contents($certPath);
+        $key = file_get_contents($keyPath);
+        
+        // Verificar que el contenido no esté vacío
+        if (empty($cert)) {
+            throw new \Exception('El certificado AFIP está vacío');
+        }
+        
+        if (empty($key)) {
+            throw new \Exception('La clave privada AFIP está vacía');
+        }
+        
+        // Verificar formato PEM básico
+        if (!str_contains($cert, '-----BEGIN CERTIFICATE-----') || !str_contains($cert, '-----END CERTIFICATE-----')) {
+            throw new \Exception('El certificado AFIP no tiene formato PEM válido');
+        }
+        
+        if (!str_contains($key, '-----BEGIN PRIVATE KEY-----') || !str_contains($key, '-----END PRIVATE KEY-----')) {
+            throw new \Exception('La clave privada AFIP no tiene formato PEM válido');
+        }
+        
+        // Limpiar cualquier espacio en blanco extra
+        $cert = trim($cert);
+        $key = trim($key);
+        
+        try {
+            $cuit = env('AFIP_CUIT', 30716353334); // Usar CUIT del .env o el actualizado
+            $this->afip = new Afip([
+                'CUIT' => $cuit,
+                'production' => env('AFIP_PRODUCTION', false),
+                'cert' => $cert,
+                'key'  => $key,
+                'access_token' => env('AFIP_ACCESS_TOKEN', 'default_access_token')
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Error al inicializar AFIP: ' . $e->getMessage());
+            throw new \Exception('Error al inicializar servicio AFIP: ' . $e->getMessage());
+        }
     }
 
     /**
-     * Crear comprobante AFIP (genÃ©rico)
+     * Crear comprobante AFIP (genérico)
      */
     private function createVoucher(array $data)
     {
@@ -38,7 +80,7 @@ class AfipService
     }
 
     /**
-     * Obtener el Ãºltimo nÃºmero de comprobante emitido
+     * Obtener el último número de comprobante emitido
      */
     public function getLastVoucher($ptoVta, $cbteTipo)
     {
@@ -54,21 +96,21 @@ class AfipService
             throw new \Exception('El CUIT del cliente es requerido para emitir Factura A');
         }
 
-        \Log::info('AFIP - Iniciando creaciÃ³n de Factura A', [
+        \Log::info('AFIP - Iniciando creación de Factura A', [
             'ptoVta' => $ptoVta,
             'cuitCliente' => $cuitCliente,
             'importe' => $importe
         ]);
 
         $lastVoucher = $this->getLastVoucher($ptoVta, 1);
-        \Log::info('AFIP - Ãšltimo voucher obtenido para Factura A', ['lastVoucher' => $lastVoucher]);
+        \Log::info('AFIP - Último voucher obtenido para Factura A', ['lastVoucher' => $lastVoucher]);
 
         $importeTotal = round($importe, 2);
         $importeNeto = round($importe / 1.21, 2);
         $importeIVA = round($importeTotal - $importeNeto, 2);
         $baseImponibleIVA = round($importeTotal, 2);
 
-        \Log::info('AFIP - CÃ¡lculos de importes para Factura A', [
+        \Log::info('AFIP - Cálculos de importes para Factura A', [
             'importeTotal' => $importeTotal,
             'importeNeto' => $importeNeto,
             'importeIVA' => $importeIVA
@@ -109,7 +151,7 @@ class AfipService
 
         $result = $this->createVoucher($data);
 
-        \Log::info('AFIP - Resultado de creaciÃ³n de Factura A', $result);
+        \Log::info('AFIP - Resultado de creación de Factura A', $result);
 
         return $result;
     }
@@ -163,7 +205,7 @@ class AfipService
     }
 
     /**
-     * Nota de CrÃ©dito A
+     * Nota de Crédito A
      */
     public function notaCreditoA($ptoVta, $cuitCliente, $importe, $nroFacturaAsociada)
     {
@@ -175,7 +217,7 @@ class AfipService
         $data = [
             'CantReg'   => 1,
             'PtoVta'    => $ptoVta,
-            'CbteTipo'  => 3, // Nota de CrÃ©dito A
+            'CbteTipo'  => 3, // Nota de Crédito A
             'Concepto'  => 2, // Servicios
             'DocTipo'   => 80,
             'DocNro'    => $cuitCliente,
@@ -214,7 +256,7 @@ class AfipService
     }
 
     /**
-     * Nota de CrÃ©dito B
+     * Nota de Crédito B
      */
     public function notaCreditoB($ptoVta, $importe, $nroFacturaAsociada)
     {
@@ -227,7 +269,7 @@ class AfipService
         $data = [
             'CantReg'   => 1,
             'PtoVta'    => $ptoVta,
-            'CbteTipo'  => 8, // Nota de CrÃ©dito B
+            'CbteTipo'  => 8, // Nota de Crédito B
             'Concepto'  => 2,
             'DocTipo'   => 99, // Consumidor Final
             'DocNro'    => 0,
@@ -263,5 +305,89 @@ class AfipService
         ];
 
         return $this->createVoucher($data);
+    }
+
+    /**
+     * Métodos de prueba y consulta para testing
+     */
+    
+    /**
+     * Obtener estado del servidor AFIP
+     */
+    public function getServerStatus()
+    {
+        return $this->afip->ElectronicBilling->GetServerStatus();
+    }
+    
+    /**
+     * Obtener tipos de comprobantes disponibles
+     */
+    public function getVoucherTypes()
+    {
+        return $this->afip->ElectronicBilling->GetVoucherTypes();
+    }
+    
+    /**
+     * Obtener tipos de documentos disponibles
+     */
+    public function getDocumentTypes()
+    {
+        return $this->afip->ElectronicBilling->GetDocumentTypes();
+    }
+    
+    /**
+     * Obtener tipos de alícuotas de IVA disponibles
+     */
+    public function getAliquotTypes()
+    {
+        return $this->afip->ElectronicBilling->GetAliquotTypes();
+    }
+    
+    /**
+     * Obtener tipos de monedas disponibles
+     */
+    public function getCurrencyTypes()
+    {
+        return $this->afip->ElectronicBilling->GetCurrenciesTypes();
+    }
+    
+    /**
+     * Obtener tipos de conceptos disponibles
+     */
+    public function getConceptTypes()
+    {
+        return $this->afip->ElectronicBilling->GetConceptTypes();
+    }
+    
+    /**
+     * Obtener tipos de tributos disponibles
+     */
+    public function getTaxTypes()
+    {
+        return $this->afip->ElectronicBilling->GetTaxTypes();
+    }
+    
+    /**
+     * Obtener información detallada de un comprobante
+     */
+    public function getVoucherInfo($number, $salesPoint, $type)
+    {
+        return $this->afip->ElectronicBilling->GetVoucherInfo($number, $salesPoint, $type);
+    }
+    
+    /**
+     * Obtener puntos de venta habilitados
+     */
+    public function getSalesPoints()
+    {
+        return $this->afip->ElectronicBilling->GetSalesPoints();
+    }
+    
+    /**
+     * Obtener instancia AFIP para acceso directo (solo para testing)
+     */
+    public function getAfipInstance()
+    {
+        return $this->afip;
     }
 }

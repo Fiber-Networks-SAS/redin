@@ -101,9 +101,9 @@ class BillController extends Controller
         $this->paymentQRService = $paymentQRService;
         $this->afipService = $afipService;
 
-        $this->tipo = ['Internet', 'TelefonÃ­a', 'TelevisiÃ³n'];
+        $this->tipo = ['Internet', 'Telefonía', 'Televisión'];
         $this->drop = ['En Pilar', 'En Domicilio', 'Sin Drop'];
-        $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express', 4 => 'Mercado Pago']; // 4 => 'Tarjeta de CrÃ©dito', 5 => 'DepÃ³sito'
+        $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express', 4 => 'Mercado Pago']; // 4 => 'Tarjeta de Crédito', 5 => 'Depósito'
         $this->meses = [
             '01' => 'ENERO',
             '02' => 'FEBRERO',
@@ -130,7 +130,7 @@ class BillController extends Controller
     public function getList(Request $request)
     {
         $periodos = [];
-        $facturas = Factura::select(['id', 'periodo', 'fecha_pago', 'nro_cliente', 'importe_total'])->get()->groupBy('periodo');
+        $facturas = Factura::select(['id', 'periodo', 'fecha_pago', 'nro_cliente', 'importe_total', 'mail_date'])->get()->groupBy('periodo');
         // return $facturas;
 
         foreach ($facturas as $periodo => $factura) {
@@ -145,7 +145,7 @@ class BillController extends Controller
                 }
 
                 // obtengo las facturas que fueron notificadas por mail
-                if ($f->mail_date != null && $f->mail_date != '') {
+                if (!empty($f->mail_date)) {
                     $mails++;
                 }
             }
@@ -412,10 +412,10 @@ class BillController extends Controller
         $factura->primer_vto_fecha = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
         $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
 
-        // $factura->importe_subtotal = number_format($factura->importe_subtotal, 2);
-        // $factura->importe_bonificacion = number_format($factura->importe_bonificacion, 2);
-        // $factura->importe_total = number_format($factura->importe_total, 2);
-        // $factura->segundo_vto_importe = number_format($factura->segundo_vto_importe, 2);
+        // $factura->importe_subtotal = $factura->importe_subtotal;
+        // $factura->importe_bonificacion = $factura->importe_bonificacion;
+        // $factura->importe_total = $factura->importe_total;
+        // $factura->segundo_vto_importe = $factura->segundo_vto_importe;
 
         $factura->fecha_pago = $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null;
 
@@ -443,7 +443,7 @@ class BillController extends Controller
 
         //-- VALIDATOR START --//
         $rules = array(
-            'importe_bonificacion'      => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
+            'importe_bonificacion'      => ['required', 'number'],
         );
 
         $validator = Validator::make($request->all(), $rules);
@@ -493,10 +493,10 @@ class BillController extends Controller
 
             if ($factura->save()) {
 
-                // Regenerar cÃ³digos QR con el nuevo importe
+                // Regenerar códigos QR con el nuevo importe
                 $this->generatePaymentQRCodes($factura);
 
-                // Emitir nota de crÃ©dito en AFIP
+                // Emitir nota de crédito en AFIP
                 try {
                     $cbteTipo = $factura->talonario->letra == 'A' ? 3 : 8;
                     $lastVoucher = $this->afipService->getLastVoucher($factura->talonario->nro_punto_vta, $cbteTipo);
@@ -516,11 +516,11 @@ class BillController extends Controller
                         );
                     }
 
-                    Log::info('Respuesta AFIP nota de crÃ©dito', $afipResponse);
+                    Log::info('Respuesta AFIP nota de crédito', $afipResponse);
 
-                    // Verificar si la respuesta indica Ã©xito
+                    // Verificar si la respuesta indica éxito
                     if (isset($afipResponse['CbteDesde']) && !empty($afipResponse['CbteDesde'])) {
-                        Log::info('CbteDesde encontrado, creando nota de crÃ©dito', ['CbteDesde' => $afipResponse['CbteDesde']]);
+                        Log::info('CbteDesde encontrado, creando nota de crédito', ['CbteDesde' => $afipResponse['CbteDesde']]);
                         $nota = new NotaCredito();
                         $nota->factura_id = $factura->id;
                         $nota->talonario_id = $factura->talonario_id;
@@ -536,37 +536,37 @@ class BillController extends Controller
                             $nota->cae_vto = null;
                         }
                         $nota->fecha_emision = Carbon::now();
-                        $nota->motivo = 'BonificaciÃ³n';
+                        $nota->motivo = 'Bonificacion';
                         $nota->nro_cliente = $factura->cliente->nro_cliente;
                         $nota->periodo = $factura->periodo;
 
-                        Log::info('Datos de nota de crÃ©dito a guardar', $nota->toArray());
+                        Log::info('Datos de nota de crédito a guardar', $nota->toArray());
 
                         try {
                             $saved = $nota->save();
                             if ($saved) {
-                                Log::info('Nota de crÃ©dito creada exitosamente', ['nota_id' => $nota->id]);
+                                Log::info('Nota de crédito creada exitosamente', ['nota_id' => $nota->id]);
                             } else {
-                                Log::error('Error al guardar nota de crÃ©dito: save() retornÃ³ false');
+                                Log::error('Error al guardar nota de crédito: save() retornó false');
                                 Log::error('Atributos de la nota:', $nota->getAttributes());
                             }
                         } catch (\Exception $e) {
-                            Log::error('ExcepciÃ³n al guardar nota de crÃ©dito: ' . $e->getMessage());
+                            Log::error('Excepción al guardar nota de crédito: ' . $e->getMessage());
                             Log::error('Stack trace: ' . $e->getTraceAsString());
                         }
                     } elseif (isset($afipResponse['CAE']) && !empty($afipResponse['CAE'])) {
-                        // AFIP devolviÃ³ CAE pero no CbteDesde - intentar obtener el nÃºmero asignado
-                        Log::warning('AFIP devolviÃ³ CAE pero no CbteDesde - intentando obtener nÃºmero de voucher asignado');
+                        // AFIP devolvió CAE pero no CbteDesde - intentar obtener el número asignado
+                        Log::warning('AFIP devolvió CAE pero no CbteDesde - intentando obtener número de voucher asignado');
                         Log::warning('Respuesta AFIP completa:', $afipResponse);
 
-                        // Intentar obtener el Ãºltimo voucher despuÃ©s de la creaciÃ³n para ver si fue asignado
+                        // Intentar obtener el último voucher después de la creación para ver si fue asignado
                         try {
                             $newLastVoucher = $this->afipService->getLastVoucher($factura->talonario->nro_punto_vta, $cbteTipo);
-                            Log::info('AFIP - Ãšltimo voucher despuÃ©s de creaciÃ³n', ['new_last_voucher' => $newLastVoucher]);
+                            Log::info('AFIP - Último voucher después de creación', ['new_last_voucher' => $newLastVoucher]);
 
                             if ($newLastVoucher > $lastVoucher) {
-                                // El voucher fue asignado, usar el nuevo nÃºmero
-                                Log::info('AFIP - Voucher asignado detectado, usando nÃºmero: ' . $newLastVoucher);
+                                // El voucher fue asignado, usar el nuevo número
+                                Log::info('AFIP - Voucher asignado detectado, usando número: ' . $newLastVoucher);
                                 $afipResponse['CbteDesde'] = $newLastVoucher;
                                 $nota = new NotaCredito();
                                 $nota->factura_id = $factura->id;
@@ -583,56 +583,56 @@ class BillController extends Controller
                                     $nota->cae_vto = null;
                                 }
                                 $nota->fecha_emision = Carbon::now();
-                                $nota->motivo = 'BonificaciÃ³n';
+                                $nota->motivo = 'Bonificacion';
                                 $nota->nro_cliente = $factura->cliente->nro_cliente;
                                 $nota->periodo = $factura->periodo;
 
                                 if ($nota->save()) {
-                                    Log::info('Nota de crÃ©dito creada exitosamente con workaround', ['nota_id' => $nota->id, 'nro_nota_credito' => $newLastVoucher]);
+                                    Log::info('Nota de crédito creada exitosamente con workaround', ['nota_id' => $nota->id, 'nro_nota_credito' => $newLastVoucher]);
                                 } else {
-                                    Log::error('Error al guardar nota de crÃ©dito con workaround');
+                                    Log::error('Error al guardar nota de crédito con workaround');
                                     $nota = null;
                                 }
                             } else {
-                                Log::warning('AFIP - No se detectÃ³ nuevo voucher asignado, no se crea nota de crÃ©dito');
+                                Log::warning('AFIP - No se detectó nuevo voucher asignado, no se crea nota de crédito');
                                 $nota = null;
                             }
                         } catch (\Exception $e) {
-                            Log::error('Error al intentar obtener Ãºltimo voucher despuÃ©s de creaciÃ³n: ' . $e->getMessage());
+                            Log::error('Error al intentar obtener último voucher después de creación: ' . $e->getMessage());
                             $nota = null;
                         }
                     } else {
                         $nota = null;
-                        Log::error('AFIP no devolviÃ³ CbteDesde ni CAE vÃ¡lido, no se crea la nota de crÃ©dito');
+                        Log::error('AFIP no devolvió CbteDesde ni CAE válido, no se crea la nota de crédito');
                         Log::error('Respuesta completa de AFIP:', $afipResponse);
                     }
 
-                    // Crear o actualizar bonificaciÃ³n puntual
+                    // Crear o actualizar bonificación puntual
                     $existingBonificacion = BonificacionPuntual::where('factura_id', $factura->id)->first();
                     if ($existingBonificacion) {
                         $existingBonificacion->importe += $this->floatvalue($request->importe_bonificacion);
                         $existingBonificacion->afip_response = $afipResponse; // actualizar respuesta AFIP
                         $existingBonificacion->nota_credito_id = $nota ? $nota->id : $existingBonificacion->nota_credito_id;
                         if ($existingBonificacion->save()) {
-                            Log::info('BonificaciÃ³n puntual actualizada exitosamente', ['bonificacion_id' => $existingBonificacion->id]);
+                            Log::info('Bonificación puntual actualizada exitosamente', ['bonificacion_id' => $existingBonificacion->id]);
                         } else {
-                            Log::error('Error al actualizar bonificaciÃ³n puntual: save() retornÃ³ false');
+                            Log::error('Error al actualizar bonificación puntual: save() retornó false');
                         }
                     } else {
                         $bonificacion = new BonificacionPuntual();
                         $bonificacion->factura_id = $factura->id;
                         $bonificacion->importe = $this->floatvalue($request->importe_bonificacion);
-                        $bonificacion->descripcion = 'BonificaciÃ³n aplicada por la empresa';
+                        $bonificacion->descripcion = 'Bonificacion aplicada por la empresa';
                         $bonificacion->afip_response = $afipResponse;
                         $bonificacion->nota_credito_id = $nota ? $nota->id : null;
                         if ($bonificacion->save()) {
-                            Log::info('BonificaciÃ³n puntual creada exitosamente', ['bonificacion_id' => $bonificacion->id]);
+                            Log::info('Bonificación puntual creada exitosamente', ['bonificacion_id' => $bonificacion->id]);
                         } else {
-                            Log::error('Error al guardar bonificaciÃ³n puntual: save() retornÃ³ false');
+                            Log::error('Error al guardar bonificación puntual: save() retornó false');
                         }
                     }
                 } catch (\Exception $e) {
-                    Log::error('Error al emitir nota de crÃ©dito: ' . $e->getMessage());
+                    Log::error('Error al emitir nota de crédito: ' . $e->getMessage());
                     dd($e);
                 }
 
@@ -1091,7 +1091,7 @@ class BillController extends Controller
                 foreach ($item['servicios_activos'] as $servicio) {
                     $importe_servicio = $servicio->costo_proporcional_importe + $servicio->costo_abono_pagar + $servicio->costo_instalacion_importe_pagar;
 
-                    // Verificar si existe bonificaciÃ³n vigente para este servicio
+                    // Verificar si existe bonificación vigente para este servicio
                     $bonificacion = BonificacionServicio::where('service_id', $servicio->servicio_id)
                         ->where('activo', true)
                         ->whereRaw('fecha_inicio <= ?', [$fecha_facturacion])
@@ -1100,7 +1100,7 @@ class BillController extends Controller
                     if ($bonificacion) {
                         $descuento_servicio = $bonificacion->calcularBonificacion($importe_servicio);
                         $bonificacion_total += $descuento_servicio;
-                        // Guardar informaciÃ³n de bonificaciÃ³n en el servicio para el detalle
+                        // Guardar información de bonificación en el servicio para el detalle
                         $servicio->bonificacion_aplicada = $descuento_servicio;
                         $servicio->bonificacion_id = $bonificacion->id;
                         $servicio->bonificacion_detalle = $bonificacion->descripcion ? $bonificacion->descripcion : 'Bonificacion aplicada al servicio';
@@ -1181,7 +1181,7 @@ class BillController extends Controller
                             );
                         }
 
-                        Log::info('Respuesta AFIP factura periÃ³dica', $afipResponse);
+                        Log::info('Respuesta AFIP factura periódica', $afipResponse);
 
                         // Actualizar factura con datos de AFIP
                         if (isset($afipResponse['CAE']) && !empty($afipResponse['CAE'])) {
@@ -1189,16 +1189,16 @@ class BillController extends Controller
                             try {
                                 $factura->cae_vto = isset($afipResponse['CAEFchVto']) ? Carbon::createFromFormat('Ymd', $afipResponse['CAEFchVto']) : null;
                             } catch (\Exception $e) {
-                                Log::error('Error parsing CAEFchVto en factura periÃ³dica: ' . $e->getMessage());
+                                Log::error('Error parsing CAEFchVto en factura periódica: ' . $e->getMessage());
                                 $factura->cae_vto = null;
                             }
                             $factura->save();
-                            Log::info('Factura periÃ³dica actualizada con datos AFIP', ['factura_id' => $factura->id, 'cae' => $factura->cae]);
+                            Log::info('Factura periódica actualizada con datos AFIP', ['factura_id' => $factura->id, 'cae' => $factura->cae]);
                         } else {
-                            Log::warning('AFIP no devolviÃ³ CAE vÃ¡lido para factura periÃ³dica', ['factura_id' => $factura->id, 'afip_response' => $afipResponse]);
+                            Log::warning('AFIP no devolvió CAE válido para factura periódica', ['factura_id' => $factura->id, 'afip_response' => $afipResponse]);
                         }
                     } catch (\Exception $e) {
-                        Log::error('Error al emitir factura periÃ³dica en AFIP: ' . $e->getMessage());
+                        Log::error('Error al emitir factura periódica en AFIP: ' . $e->getMessage());
                         // No interrumpe el proceso, la factura se guarda sin CAE
                     }
 
@@ -1257,21 +1257,21 @@ class BillController extends Controller
             // return $facturas;
             // return $facturas = Factura::where('periodo', $request->periodo)->get();
 
-            // EnvÃ­o automÃ¡tico de emails para todas las facturas creadas
+            // Envío automático de emails para todas las facturas creadas
             foreach ($facturas as $factura) {
                 try {
                     $this->sendEmailFactura($request, $factura);
-                    Log::info("Email enviado automÃ¡ticamente para factura ID: {$factura->id}, cliente: {$factura->cliente->email}");
+                    Log::info("Email enviado automáticamente para factura ID: {$factura->id}, cliente: {$factura->cliente->email}");
                 } catch (Exception $e) {
                     // Log del error pero no interrumpir el proceso
-                    Log::error("Error enviando email automÃ¡tico para factura ID: {$factura->id}. Error: " . $e->getMessage());
+                    Log::error("Error enviando email automático para factura ID: {$factura->id}. Error: " . $e->getMessage());
                 }
             }
-            // genero los pdf's: sÃ³lo del periodo y factura creada (paso el id para evitar regenerar todo)
+            // genero los pdf's: sólo del periodo y factura creada (paso el id para evitar regenerar todo)
             $this->setFacturasPeriodoPDF($request->periodo); // antes regeneraba todo el periodo
             $filename = $this->getFacturasPeriodoPDFPath($request);
 
-            return redirect('/admin/period')->with(['status' => 'success', 'message' => 'El perÃ­odo ' . $request->periodo . ' fuÃ© facturado.', 'icon' => 'fa-smile-o', 'filename' => $filename]);
+            return redirect('/admin/period')->with(['status' => 'success', 'message' => 'El período ' . $request->periodo . ' fué facturado.', 'icon' => 'fa-smile-o', 'filename' => $filename]);
         } else {
 
             return redirect('/admin/period')->with(['status' => 'danger', 'message' => 'Ha ocurrido un error.', 'icon' => 'fa-frown-o']);
@@ -1349,8 +1349,13 @@ class BillController extends Controller
 
     public function zerofill($num, $zerofill = 8)
     {
+        // ?? SOLUCIÓN: Verificar si es numérico antes de aplicar zerofill
+        if (is_numeric($num)) {
+            return str_pad($num, $zerofill, '0', STR_PAD_LEFT);
+        }
 
-        return str_pad($num, $zerofill, '0', STR_PAD_LEFT);
+        // Si es alfanumérico, devolver tal como está
+        return $num;
     }
 
     public function getImporteConTasaInteres($importe, $tasa)
@@ -1387,9 +1392,9 @@ class BillController extends Controller
     public function getNroFactura($talonario_id)
     {
 
-        // Usar una transacciÃ³n con lockForUpdate para evitar condiciones de carrera
+        // Usar una transacción con lockForUpdate para evitar condiciones de carrera
         return DB::transaction(function () use ($talonario_id) {
-            // obtengo el mÃ¡ximo nro_factura con bloqueo para esta transacciÃ³n
+            // obtengo el máximo nro_factura con bloqueo para esta transacción
             $nro_factura = DB::table('facturas')
                 ->where('talonario_id', $talonario_id)
                 ->lockForUpdate()
@@ -1522,58 +1527,58 @@ class BillController extends Controller
     public function getCodigoPago($importe, $fecha_vto, $cod_cliente, $nro_punto_vta, $nro_factura)
     {
 
-        // cuit de la empresa
-        $cuit = config('constants.company_cuit');
+        // // cuit de la empresa
+        // $cuit = config('constants.company_cuit');
 
-        // importe
-        // $importe  = number_format($importe, 2); // 2 decimales
-        $importe  = explode('.', $importe);
+        // // importe
+        // // $importe  = number_format($importe, 2); // 2 decimales
+        // $importe  = explode('.', $importe);
 
-        $importe_entero  = str_pad($importe[0], 6, '0', STR_PAD_LEFT);
-        $importe_decimal = count($importe) == 2 ? str_pad($importe[1], 2, '0', STR_PAD_RIGHT) : '00';
+        // $importe_entero  = str_pad($importe[0], 6, '0', STR_PAD_LEFT);
+        // $importe_decimal = count($importe) == 2 ? str_pad($importe[1], 2, '0', STR_PAD_RIGHT) : '00';
 
-        // codigo de cliente
-        $cod_cliente = str_pad($cod_cliente, 5, '0', STR_PAD_LEFT);
+        // // codigo de cliente
+        // $cod_cliente = str_pad($cod_cliente, 5, '0', STR_PAD_LEFT);
 
-        // fecha de vencimiento
-        $dt = Carbon::parse($fecha_vto);
-        $fecha_vto = $dt->year . str_pad($dt->month, 2, '0', STR_PAD_LEFT)  . str_pad($dt->day, 2, '0', STR_PAD_LEFT);
+        // // fecha de vencimiento
+        // $dt = Carbon::parse($fecha_vto);
+        // $fecha_vto = $dt->year . str_pad($dt->month, 2, '0', STR_PAD_LEFT)  . str_pad($dt->day, 2, '0', STR_PAD_LEFT);
 
-        // genero el codigo
-        $codigo = $cuit . $importe_entero . $importe_decimal . $fecha_vto . $cod_cliente . $nro_punto_vta . $nro_factura;
+        // // genero el codigo
+        // $codigo = $cuit . $importe_entero . $importe_decimal . $fecha_vto . $cod_cliente . $nro_punto_vta . $nro_factura;
 
-        // obtengo el ultimo digito
-        $digito = $this->getCodigoPagoDigito($codigo);
-        $codigo = $codigo . $digito;
+        // // obtengo el ultimo digito
+        // $digito = $this->getCodigoPagoDigito($codigo);
+        // $codigo = $codigo . $digito;
 
 
-        return $codigo;
+        return '';
     }
 
     public function getCodigoPagoDigito($codigo)
     {
-        $cadena = $codigo;
-        $sumaP = 0;
-        $sumaI = 0;
-        $j = 0;
-        for ($i = 0; $i < strlen($cadena); $i++) {
-            if ($j == 0) {
+        // $cadena = $codigo;
+        // $sumaP = 0;
+        // $sumaI = 0;
+        // $j = 0;
+        // for ($i = 0; $i < strlen($cadena); $i++) {
+        //     if ($j == 0) {
 
-                $sumaI = $sumaI + $cadena[$i];
-                $j = 1;
-            } else {
+        //         $sumaI = $sumaI + $cadena[$i];
+        //         $j = 1;
+        //     } else {
 
-                $sumaP = $sumaP + $cadena[$i];
-                $j = 0;
-            }
-        }
+        //         $sumaP = $sumaP + $cadena[$i];
+        //         $j = 0;
+        //     }
+        // }
 
-        $sumaI = $sumaI * 3;
-        $total = $sumaI + $sumaP;
+        // $sumaI = $sumaI * 3;
+        // $total = $sumaI + $sumaP;
 
-        $digito = $total % 10;
+        // $digito = $total % 10;
 
-        return $digito;
+        return 0;
     }
 
     // generate facturas PDF
@@ -1615,10 +1620,10 @@ class BillController extends Controller
             // genero los PDF's de las facturas individuales
             if ($factura_id == null || $factura_id == $factura->id) {
 
-                // Primero generar cÃ³digos QR de MercadoPago para cada vencimiento
+                // Primero generar códigos QR de MercadoPago para cada vencimiento
                 $this->generatePaymentQRCodes($factura);
 
-                // Crear PDF (los cÃ³digos QR se obtienen desde la vista usando el mÃ©todo del modelo)
+                // Crear PDF (los códigos QR se obtienen desde la vista usando el método del modelo)
                 $pdf = PDF::loadView('pdf.facturas', ['facturas' => [$factura]]);
                 $pdf->save($factura->filePath);
             }
@@ -1635,14 +1640,14 @@ class BillController extends Controller
     }
 
     /**
-     * Generar cÃ³digos QR de MercadoPago para una factura
+     * Generar códigos QR de MercadoPago para una factura
      */
     protected function generatePaymentQRCodes(Factura $factura)
     {
         try {
             Log::info('BillController: Generando QR codes para factura', ['factura_id' => $factura->id]);
 
-            // Cargar relaciÃ³n del cliente si no estÃ¡ cargada
+            // Cargar relación del cliente si no está cargada
             if (!$factura->cliente) {
                 $factura->load('cliente');
             }
@@ -1678,8 +1683,8 @@ class BillController extends Controller
 
             Log::info('BillController: QR codes generation completed', ['factura_id' => $factura->id]);
         } catch (Exception $e) {
-            // Log del error pero no interrumpe el proceso de facturaciÃ³n
-            Log::error('Error generando cÃ³digos QR para factura ' . $factura->id . ': ' . $e->getMessage());
+            // Log del error pero no interrumpe el proceso de facturación
+            Log::error('Error generando códigos QR para factura ' . $factura->id . ': ' . $e->getMessage());
             Log::error('Stack trace: ' . $e->getTraceAsString());
         }
     }
@@ -1857,7 +1862,7 @@ class BillController extends Controller
         }
 
         // return $facturas;
-        return back()->with(['status' => 'success', 'message' => 'Se ha enviado la factura al correo electrÃ³nico ' . $factura->cliente->email . '.', 'icon' => 'fa-smile-o']);
+        return back()->with(['status' => 'success', 'message' => 'Se ha enviado la factura al correo electrónico ' . $factura->cliente->email . '.', 'icon' => 'fa-smile-o']);
     }
 
     public function sendEmailFacturasPeriodo(Request $request, $mes, $ano)
@@ -1873,7 +1878,7 @@ class BillController extends Controller
         }
 
         // return $facturas;
-        return redirect('/admin/period')->with(['status' => 'success', 'message' => 'Se han enviado las facturas del perÃ­odo ' . $periodo . '.', 'icon' => 'fa-smile-o']);
+        return redirect('/admin/period')->with(['status' => 'success', 'message' => 'Se han enviado las facturas del período ' . $periodo . '.', 'icon' => 'fa-smile-o']);
     }
 
     public function sendEmailFactura($request, $factura)
@@ -2010,7 +2015,7 @@ class BillController extends Controller
     public function balanceSearch(Request $request)
     {
 
-        // Guardar filtros en sesiÃ³n para usar en descargas posteriores
+        // Guardar filtros en sesión para usar en descargas posteriores
         $filters = [
             'periodo' => $request->periodo,
             'user_id' => $request->user_id
@@ -2169,7 +2174,7 @@ class BillController extends Controller
 
                         // add headers
                         $sheet->appendRow(array(
-                            'PerÃ­odo',
+                            'Período',
                             'Total Facturas',
                             'Facturas Pagadas',
                             'Facturas Adeudadas',
@@ -2197,7 +2202,7 @@ class BillController extends Controller
                             ));
                         }
 
-                        // add total general - tambiÃ©n convertir a string
+                        // add total general - también convertir a string
                         $sheet->appendRow(array(
                             'Totales',
                             (string)$footer_facturas_total,
@@ -2210,7 +2215,7 @@ class BillController extends Controller
                 })
                     ->store('xls', public_path(config('constants.folder_balance_xls')));
 
-                // Retornar el nombre con extensiÃ³n
+                // Retornar el nombre con extensión
                 return $filename . '.xls';
             } catch (\Exception $e) {
                 \Log::error('Error generando Excel: ' . $e->getMessage());
@@ -2223,11 +2228,11 @@ class BillController extends Controller
     public function getBalanceXLS(Request $request)
     {
         try {
-            // Usar filtros de la sesiÃ³n si existen, sino generar balance general
+            // Usar filtros de la sesión si existen, sino generar balance general
             $filters = session('balance_filters', []);
 
             if (!empty($filters)) {
-                // Crear request con filtros de sesiÃ³n manteniendo el perÃ­odo seleccionado
+                // Crear request con filtros de sesión manteniendo el período seleccionado
                 $searchRequest = new Request([
                     'periodo' => isset($filters['periodo']) ? $filters['periodo'] : '',
                     'user_id' => isset($filters['user_id']) ? $filters['user_id'] : ''
@@ -2238,7 +2243,7 @@ class BillController extends Controller
                     $filename = $this->generateBalanceXLS($response, $filters);
                 }
             } else {
-                // Si no hay filtros en sesiÃ³n, generar balance general de todos los perÃ­odos
+                // Si no hay filtros en sesión, generar balance general de todos los períodos
                 $searchRequest = new Request(['periodo' => '', 'user_id' => '']);
                 $response = $this->getBalance($searchRequest);
 
@@ -2400,9 +2405,9 @@ class BillController extends Controller
                         $sheet->appendRow(array(
                             'Cod. Cliente',
                             'Nombre y Apellido',
-                            'PerÃ­odo',
+                            'Período',
                             'Factura',
-                            'Fecha de EmisiÃ³n',
+                            'Fecha de Emisión',
                             'Importe Facturado',
                             'Fecha de Pago',
                             'Importe Pagado',
@@ -2668,7 +2673,7 @@ class BillController extends Controller
                 foreach ($item['servicios_activos'] as $servicio) {
                     $importe_servicio = $servicio->costo_proporcional_importe + $servicio->costo_abono_pagar + $servicio->costo_instalacion_importe_pagar;
 
-                    // Verificar si existe bonificaciÃ³n vigente para este servicio
+                    // Verificar si existe bonificación vigente para este servicio
                     $bonificacion = BonificacionServicio::where('service_id', $servicio->servicio_id)
                         ->where('activo', true)
                         ->whereRaw('fecha_inicio <= ?', [$fecha_facturacion])
@@ -2678,7 +2683,7 @@ class BillController extends Controller
                     if ($bonificacion) {
                         $descuento_servicio = $bonificacion->calcularBonificacion($importe_servicio);
                         $bonificacion_total += $descuento_servicio;
-                        // Guardar informaciÃ³n de bonificaciÃ³n en el servicio para el detalle
+                        // Guardar información de bonificación en el servicio para el detalle
                         $servicio->bonificacion_aplicada = $descuento_servicio;
                         $servicio->bonificacion_id = $bonificacion->id;
                         $servicio->bonificacion_detalle = $bonificacion->descripcion ? $bonificacion->descripcion : 'Bonificacion aplicada al servicio';
@@ -2774,14 +2779,14 @@ class BillController extends Controller
                             $factura->save();
                             Log::info('Factura simple actualizada con datos AFIP', ['factura_id' => $factura->id, 'cae' => $factura->cae]);
                         } else {
-                            Log::warning('AFIP no devolviÃ³ CAE vÃ¡lido para factura simple', ['factura_id' => $factura->id, 'afip_response' => $afipResponse]);
+                            Log::warning('AFIP no devolvió CAE válido para factura simple', ['factura_id' => $factura->id, 'afip_response' => $afipResponse]);
                         }
                     } catch (\Exception $e) {
                         Log::error('Error al emitir factura simple en AFIP: ' . $e->getMessage());
                         // No interrumpe el proceso, la factura se guarda sin CAE
                     }
 
-                    // Generar cÃ³digos QR con el nuevo importe
+                    // Generar códigos QR con el nuevo importe
                     $this->generatePaymentQRCodes($factura);
 
                     // Detalle
@@ -2823,7 +2828,7 @@ class BillController extends Controller
                         if ($servicio->costo_instalacion_importe_pagar > 0) {
                             $importe_servicio += $servicio->costo_instalacion_importe_pagar;
                         }
-                        // Restar bonificaciÃ³n aplicada si existe
+                        // Restar bonificación aplicada si existe
                         if (isset($servicio->bonificacion_aplicada) && $servicio->bonificacion_aplicada > 0) {
                             $importe_servicio -= $servicio->bonificacion_aplicada;
                         }
@@ -2843,21 +2848,21 @@ class BillController extends Controller
             // return $facturas;
             // return $facturas = Factura::where('periodo', $request->periodo)->get();
             $this->singleBillPDF($factura);
-            // EnvÃ­o automÃ¡tico de emails para todas las facturas creadas
+            // Envío automático de emails para todas las facturas creadas
             foreach ($facturas as $factura) {
                 try {
                     $this->sendEmailFactura($request, $factura);
-                    Log::info("Email enviado automÃ¡ticamente para factura individual ID: {$factura->id}, cliente: {$factura->cliente->email}");
+                    Log::info("Email enviado automáticamente para factura individual ID: {$factura->id}, cliente: {$factura->cliente->email}");
                 } catch (Exception $e) {
                     // Log del error pero no interrumpir el proceso
-                    Log::error("Error enviando email automÃ¡tico para factura individual ID: {$factura->id}. Error: " . $e->getMessage());
+                    Log::error("Error enviando email automático para factura individual ID: {$factura->id}. Error: " . $e->getMessage());
                 }
             }
 
             // genero los pdf's del periodo facturados
             //$this->setFacturasPeriodoPDF($request->periodo); // SEGUIR SEGUIR SEGUIR SEGUIR (PASAR $request)
             $filename = $this->getFacturaPDFPath($request, $factura);
-            // return redirect('/admin/period')->with(['status' => 'success', 'message' => 'El perÃ­odo '.$request->periodo.' fuÃ© facturado.', 'icon' => 'fa-smile-o', 'filename' => $filename]);
+            // return redirect('/admin/period')->with(['status' => 'success', 'message' => 'El período '.$request->periodo.' fué facturado.', 'icon' => 'fa-smile-o', 'filename' => $filename]);
 
             return redirect('/admin/bills/single')->with(['status' => 'success', 'message' => 'Se ha generado la factura ' . $factura->talonario->letra . ' ' . $factura->talonario->nro_punto_vta . ' - ' . $factura->nro_factura . '.', 'icon' => 'fa-smile-o', 'filename' => $filename, 'factura_id' => $factura->id]);
         } else {
@@ -2880,11 +2885,11 @@ class BillController extends Controller
         $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
         $factura->tercer_vto_fecha  = Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y');
 
-        $factura->importe_subtotal      = number_format($factura->importe_subtotal, 2);
-        $factura->importe_bonificacion  = number_format($factura->importe_bonificacion, 2);
-        $factura->importe_total         = number_format($factura->importe_total, 2);
-        $factura->segundo_vto_importe   = number_format($factura->segundo_vto_importe, 2);
-        $factura->tercer_vto_importe    = number_format($factura->tercer_vto_importe, 2);
+        // $factura->importe_subtotal      = number_format($factura->importe_subtotal, 2);
+        // $factura->importe_bonificacion  = number_format($factura->importe_bonificacion, 2);
+        // $factura->importe_total         = number_format($factura->importe_total, 2);
+        // $factura->segundo_vto_importe   = number_format($factura->segundo_vto_importe, 2);
+        // $factura->tercer_vto_importe    = number_format($factura->tercer_vto_importe, 2);
 
         // genero el path del pdf de la factura
         $factura->filename = $factura->talonario->nro_punto_vta . '-' . $factura->nro_factura;
@@ -2900,10 +2905,10 @@ class BillController extends Controller
         }
 
 
-        // Primero generar cÃ³digos QR de MercadoPago para cada vencimiento
+        // Primero generar códigos QR de MercadoPago para cada vencimiento
         $this->generatePaymentQRCodes($factura);
 
-        // Crear PDF (los cÃ³digos QR se obtienen desde la vista usando el mÃ©todo del modelo)
+        // Crear PDF (los códigos QR se obtienen desde la vista usando el método del modelo)
         $pdf = PDF::loadView('pdf.facturas', ['facturas' => [$factura]]);
         $pdf->save($factura->filePath);
 
@@ -3063,7 +3068,7 @@ class BillController extends Controller
         $detalles = $factura->detalle;
 
         foreach ($detalles as $detalle) {
-            // Buscar bonificaciÃ³n vigente para este servicio
+            // Buscar bonificación vigente para este servicio
             $bonificacion = BonificacionServicio::where('service_id', $detalle->servicio_id)
                 ->vigentes($fecha_facturacion)
                 ->first();
@@ -3082,7 +3087,7 @@ class BillController extends Controller
                     $importe_servicio += $detalle->costo_instalacion;
                 }
 
-                // Aplicar bonificaciÃ³n
+                // Aplicar bonificación
                 $descuento = $bonificacion->calcularBonificacion($importe_servicio);
                 $bonificacion_total += $descuento;
 

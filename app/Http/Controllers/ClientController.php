@@ -33,6 +33,7 @@ use App\Interes;
 use App\Reclamo;
 use App\Cuota;
 use App\PagosConfig;
+use App\PaymentPreference;
 
 // use Entrust;
 use PDF;
@@ -132,6 +133,9 @@ class ClientController extends Controller
             $user->password = Hash::make($request->dni);
             $user->remember_token = str_random(60);
             $user->email = $request->email;
+            $user->remember_token = null;
+            $user->fecha_registro = Carbon::now();
+
 
             // Save user data
             if ($user->save()) {
@@ -142,12 +146,13 @@ class ClientController extends Controller
                 try {
 
                     // send Mail
-                    Mail::send('email.account_activate', ['remember_token_url' => $remember_token_url], function ($message) use ($user)
-                     {
-                        $message->from(config('constants.account_no_reply'), config('constants.title'))
-                                ->to($user->email)
-                                ->subject('Activa tu cuenta');
-                    });
+                    //Mail::send('email.account_activate', ['remember_token_url' => $remember_token_url], function ($message) use ($user)
+                    // {
+                    //    $message->from(config('constants.account_no_reply'), config('constants.title'))
+                    //            ->to($user->email)
+                    //            ->subject('Activa tu cuenta');
+                    // });
+		
                     
                 } catch (\Exception $e) {
                     
@@ -537,9 +542,9 @@ class ClientController extends Controller
             $factura->primer_vto_fecha = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
             $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
 
-            $factura->importe_subtotal = number_format($factura->importe_subtotal, 2); 
-            $factura->importe_bonificacion = number_format($factura->importe_bonificacion, 2); 
-            $factura->importe_total = number_format($factura->importe_total, 2); 
+            $factura->importe_subtotal = $factura->importe_subtotal; 
+            $factura->importe_bonificacion = $factura->importe_bonificacion; 
+            $factura->importe_total = $factura->importe_total; 
 
             $factura->fecha_pago = $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null;
             
@@ -583,14 +588,14 @@ class ClientController extends Controller
             $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
             $factura->tercer_vto_fecha = Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y');
 
-            $factura->importe_subtotal = number_format($factura->importe_subtotal, 2); 
-            $factura->importe_bonificacion = number_format($factura->importe_bonificacion, 2); 
-            $factura->importe_total = number_format($factura->importe_total, 2); 
-            $factura->segundo_vto_importe = number_format($factura->segundo_vto_importe, 2); 
-            $factura->tercer_vto_importe = number_format($factura->tercer_vto_importe, 2); 
+            $factura->importe_subtotal = $factura->importe_subtotal; 
+            $factura->importe_bonificacion = $factura->importe_bonificacion; 
+            $factura->importe_total = $factura->importe_total; 
+            $factura->segundo_vto_importe = $factura->segundo_vto_importe; 
+            $factura->tercer_vto_importe = $factura->tercer_vto_importe; 
 
             $factura->fecha_pago = $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null;
-            $factura->importe_pago = number_format($factura->importe_pago, 2); 
+            $factura->importe_pago = $factura->importe_pago; 
             $factura->forma_pago = $factura->fecha_pago ? $this->forma_pago[$factura->forma_pago] : '';
             $factura->mail_date = $factura->mail_date ? Carbon::parse($factura->mail_date)->format('d/m/Y') : null;
 
@@ -1050,7 +1055,7 @@ class ClientController extends Controller
         $localidades = Localidad::where('id', 17051)->get(); // 17051 -> POSADAS
         $talonarios = Talonario::all();
 
-        $nro_cliente  =  $this->getNroCliente('next');
+        $nro_cliente  =  null;
 
         return View::make('client_admin.create')->with(['provincias' => $provincias, 'localidades' => $localidades, 'talonarios' => $talonarios, 'nro_cliente' => $nro_cliente]);
     }
@@ -1063,7 +1068,7 @@ class ClientController extends Controller
 
         //-- VALIDATOR START --//
         $rules = array(
-            'nro_cliente'       => 'required|numeric|unique:users',  // unique - verifica que no exista en la DB
+            'nro_cliente'       => 'required|unique:users',  // unique - verifica que no exista en la DB
             'dni'               => 'required|numeric|min:7',
             'firstname'         => 'required|min:3|max:50',
             'lastname'          => 'required|min:3|max:50',
@@ -1249,7 +1254,7 @@ class ClientController extends Controller
     {
         //-- VALIDATOR START --//
         $rules = array(
-            'nro_cliente'       => 'required|numeric|unique:users,nro_cliente,'.$id,  // unique - verifica que no exista en la DB el email
+            'nro_cliente'       => 'required|unique:users,nro_cliente,'.$id,  // unique - verifica que no exista en la DB el email
             'dni'               => 'required|numeric|min:7',
             'firstname'         => 'required|min:3|max:50',
             'lastname'          => 'required|min:3|max:50',
@@ -1280,6 +1285,7 @@ class ClientController extends Controller
         $user->dni  = $request->dni;
         $user->firstname  = $request->firstname;
         $user->lastname  = $request->lastname;
+	$user->nro_cliente = $request->nro_cliente;
         
         // verifico si se actualizo el mail para notificarlo nuevamente 
         $send_email = $request->email != '' && $user->email != $request->email ? true : false;
@@ -1429,16 +1435,16 @@ class ClientController extends Controller
     public function getNroCliente($action = null)
     {
 
-        $nro_cliente = User::with('roles')
+        /*$nro_cliente = User::with('roles')
                               ->get()
                               ->filter(function ($user) {
                                   return $user->roles->contains('name', 'client');
                               })
-                              ->max('nro_cliente');
+                              ->max('nro_cliente');*/
 
-        $nro_cliente = $action != null && $action == 'next' ? $nro_cliente + 1 : $nro_cliente + 0;
+        //$nro_cliente = $action != null && $action == 'next' ? $nro_cliente + 1 : $nro_cliente + 0;
 
-        return $nro_cliente;
+        return null;
     
     }
 
@@ -2126,7 +2132,13 @@ class ClientController extends Controller
 
     public function zerofill($num, $zerofill = 8)
     {
-        return str_pad($num, $zerofill, '0', STR_PAD_LEFT);
+        // ?? SOLUCIÓN: Verificar si es numérico antes de aplicar zerofill
+    	if (is_numeric($num)) {
+    	    return str_pad($num, $zerofill, '0', STR_PAD_LEFT);
+    	}
+    
+   	 // Si es alfanumérico, devolver tal como está
+    	return $num;
     }
 
     // facturas de clientes
@@ -2227,13 +2239,38 @@ class ClientController extends Controller
         }
 
         return 'The migration process was successfully executed.';
+    } 
+
+    public function billPayMp(Request $request, $id)
+    {
+        // Lógica para procesar el pago con Mercado Pago
+        $factura = Factura::find($id);
+
+        if (!$factura) {
+            return response()->json(['error' => 'Factura no encontrada'], 404);
+        }
+
+        // Aquí iría la lógica para procesar el pago con Mercado Pago
+        $now = Carbon::now();
+
+        if ($now->lte(Carbon::parse($factura->primer_vto_fecha))) {
+            $vencimiento = 'primer';
+            $importe = $factura->importe_total;
+        } elseif ($now->lte(Carbon::parse($factura->segundo_vto_fecha))) {
+            $vencimiento = 'segundo';
+            $importe = $factura->segundo_vto_importe;
+        } else {
+            $vencimiento = 'tercero';
+            $importe = $factura->tercero_vto_importe;
+        }
+        $paymentPreference = PaymentPreference::where('factura_id', $factura->id)
+            ->where('vencimiento_tipo', $vencimiento)
+            ->first();
+
+        if ($paymentPreference && $paymentPreference->init_point) {
+            return redirect($paymentPreference->init_point);
+        } else {
+            return response()->json(['error' => 'Enlace de pago no encontrado o factura vencida'], 404);
+        }
     }
-
-
-
-
-    
-
-
-
 }

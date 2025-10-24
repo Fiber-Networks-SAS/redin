@@ -254,7 +254,7 @@ class HomeController extends Controller
             case '1': // Teléfono
                 return 'fa-phone';
             case '2': // TV
-                return 'fa-television';
+                return 'fa-desktop';
             default:
                 return 'fa-cog';
         }

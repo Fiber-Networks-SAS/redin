@@ -278,8 +278,8 @@ $(document).ready(function () {
                             }else{
                                 btn_accion = '<a href="/my-invoice/download/' + obj.id + '" target="_blank" class="btn btn-info btn-xs"><i class="fa fa-download"></i> Descargar</a>';
                             }
-
-                            return detalle + btn_accion;                            
+                            var btn_pago = '<a href="/my-invoice/pay/' + obj.id + '" class="btn btn-primary btn-xs"><i class="fa fa-credit-card"></i> Pagar con Mercado Pago</a>';
+                            return detalle + btn_accion + btn_pago;
 
                             }
                         }

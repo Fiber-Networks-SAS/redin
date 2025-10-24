@@ -333,7 +333,7 @@
         <div class="row">
 
             <div class="info_empresa">
-                <p>{{ config('constants.title') }}</p>
+                <p>Fiber Networks SAS</p>
                 <p>{{ config('constants.company_dir') }}</p>
                 <p>CUIT: {{ config('constants.company_cuit') }}</p>
                 <p>IIBB: {{ config('constants.company_iibb') }}</p>
