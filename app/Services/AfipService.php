@@ -10,6 +10,13 @@ class AfipService
 
     public function __construct()
     {
+        // Verificar si AFIP estÃ¡ habilitado mediante variable de entorno
+        if (!env('AFIP_ENABLED', true)) {
+            \Log::info('AFIP estÃ¡ deshabilitado por configuraciÃ³n de entorno');
+            $this->afip = null;
+            return;
+        }
+
         $certPath = storage_path('app/afip.crt');
         $keyPath = storage_path('app/afip.pem');
         
@@ -25,22 +32,22 @@ class AfipService
         $cert = file_get_contents($certPath);
         $key = file_get_contents($keyPath);
         
-        // Verificar que el contenido no esté vacío
+        // Verificar que el contenido no estÃ© vacÃ­o
         if (empty($cert)) {
-            throw new \Exception('El certificado AFIP está vacío');
+            throw new \Exception('El certificado AFIP estÃ¡ vacÃ­o');
         }
         
         if (empty($key)) {
-            throw new \Exception('La clave privada AFIP está vacía');
+            throw new \Exception('La clave privada AFIP estÃ¡ vacÃ­a');
         }
         
-        // Verificar formato PEM básico
-        if (!str_contains($cert, '-----BEGIN CERTIFICATE-----') || !str_contains($cert, '-----END CERTIFICATE-----')) {
-            throw new \Exception('El certificado AFIP no tiene formato PEM válido');
+        // Verificar formato PEM bÃ¡sico (compatible con PHP < 8.0)
+        if (strpos($cert, '-----BEGIN CERTIFICATE-----') === false || strpos($cert, '-----END CERTIFICATE-----') === false) {
+            throw new \Exception('El certificado AFIP no tiene formato PEM vÃ¡lido');
         }
         
-        if (!str_contains($key, '-----BEGIN PRIVATE KEY-----') || !str_contains($key, '-----END PRIVATE KEY-----')) {
-            throw new \Exception('La clave privada AFIP no tiene formato PEM válido');
+        if (strpos($key, '-----BEGIN PRIVATE KEY-----') === false || strpos($key, '-----END PRIVATE KEY-----') === false) {
+            throw new \Exception('La clave privada AFIP no tiene formato PEM vÃ¡lido');
         }
         
         // Limpiar cualquier espacio en blanco extra
@@ -63,10 +70,23 @@ class AfipService
     }
 
     /**
-     * Crear comprobante AFIP (genérico)
+     * Crear comprobante AFIP (genÃ©rico)
      */
     private function createVoucher(array $data)
     {
+        // Si AFIP estÃ¡ deshabilitado, simular respuesta exitosa
+        if ($this->afip === null) {
+            \Log::info('AFIP deshabilitado - Simulando creaciÃ³n de voucher', $data);
+            return [
+                'CAE' => 'DISABLED_' . date('YmdHis'),
+                'CAEFchVto' => date('Ymd', strtotime('+10 days')),
+                'CbteDesde' => 1,
+                'CbteHasta' => 1,
+                'Resultado' => 'A',
+                'Observaciones' => 'AFIP deshabilitado por configuraciÃ³n'
+            ];
+        }
+
         \Log::info('AFIP - Enviando datos para crear voucher', $data);
         try {
             $result = $this->afip->ElectronicBilling->CreateVoucher($data);
@@ -80,10 +100,16 @@ class AfipService
     }
 
     /**
-     * Obtener el último número de comprobante emitido
+     * Obtener el Ãºltimo nÃºmero de comprobante emitido
      */
     public function getLastVoucher($ptoVta, $cbteTipo)
     {
+        // Si AFIP estÃ¡ deshabilitado, retornar nÃºmero simulado
+        if ($this->afip === null) {
+            \Log::info('AFIP deshabilitado - Simulando Ãºltimo voucher', ['ptoVta' => $ptoVta, 'cbteTipo' => $cbteTipo]);
+            return 0; // Empezar desde 1
+        }
+
         return $this->afip->ElectronicBilling->GetLastVoucher($ptoVta, $cbteTipo);
     }
 
@@ -96,21 +122,21 @@ class AfipService
             throw new \Exception('El CUIT del cliente es requerido para emitir Factura A');
         }
 
-        \Log::info('AFIP - Iniciando creación de Factura A', [
+        \Log::info('AFIP - Iniciando creaciï¿½n de Factura A', [
             'ptoVta' => $ptoVta,
             'cuitCliente' => $cuitCliente,
             'importe' => $importe
         ]);
 
         $lastVoucher = $this->getLastVoucher($ptoVta, 1);
-        \Log::info('AFIP - Último voucher obtenido para Factura A', ['lastVoucher' => $lastVoucher]);
+        \Log::info('AFIP - ï¿½ltimo voucher obtenido para Factura A', ['lastVoucher' => $lastVoucher]);
 
         $importeTotal = round($importe, 2);
         $importeNeto = round($importe / 1.21, 2);
         $importeIVA = round($importeTotal - $importeNeto, 2);
         $baseImponibleIVA = round($importeTotal, 2);
 
-        \Log::info('AFIP - Cálculos de importes para Factura A', [
+        \Log::info('AFIP - Cï¿½lculos de importes para Factura A', [
             'importeTotal' => $importeTotal,
             'importeNeto' => $importeNeto,
             'importeIVA' => $importeIVA
@@ -151,7 +177,7 @@ class AfipService
 
         $result = $this->createVoucher($data);
 
-        \Log::info('AFIP - Resultado de creación de Factura A', $result);
+        \Log::info('AFIP - Resultado de creaciï¿½n de Factura A', $result);
 
         return $result;
     }
@@ -205,7 +231,7 @@ class AfipService
     }
 
     /**
-     * Nota de Crédito A
+     * Nota de Crï¿½dito A
      */
     public function notaCreditoA($ptoVta, $cuitCliente, $importe, $nroFacturaAsociada)
     {
@@ -217,7 +243,7 @@ class AfipService
         $data = [
             'CantReg'   => 1,
             'PtoVta'    => $ptoVta,
-            'CbteTipo'  => 3, // Nota de Crédito A
+            'CbteTipo'  => 3, // Nota de Crï¿½dito A
             'Concepto'  => 2, // Servicios
             'DocTipo'   => 80,
             'DocNro'    => $cuitCliente,
@@ -256,7 +282,7 @@ class AfipService
     }
 
     /**
-     * Nota de Crédito B
+     * Nota de Crï¿½dito B
      */
     public function notaCreditoB($ptoVta, $importe, $nroFacturaAsociada)
     {
@@ -269,7 +295,7 @@ class AfipService
         $data = [
             'CantReg'   => 1,
             'PtoVta'    => $ptoVta,
-            'CbteTipo'  => 8, // Nota de Crédito B
+            'CbteTipo'  => 8, // Nota de Crï¿½dito B
             'Concepto'  => 2,
             'DocTipo'   => 99, // Consumidor Final
             'DocNro'    => 0,
@@ -308,7 +334,7 @@ class AfipService
     }
 
     /**
-     * Métodos de prueba y consulta para testing
+     * Mï¿½todos de prueba y consulta para testing
      */
     
     /**
@@ -336,7 +362,7 @@ class AfipService
     }
     
     /**
-     * Obtener tipos de alícuotas de IVA disponibles
+     * Obtener tipos de alï¿½cuotas de IVA disponibles
      */
     public function getAliquotTypes()
     {
@@ -368,7 +394,7 @@ class AfipService
     }
     
     /**
-     * Obtener información detallada de un comprobante
+     * Obtener informaciï¿½n detallada de un comprobante
      */
     public function getVoucherInfo($number, $salesPoint, $type)
     {

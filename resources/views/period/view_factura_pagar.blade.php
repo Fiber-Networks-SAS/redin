@@ -46,16 +46,16 @@
               
                 <div class="col-md-3 col-lg-3 col-sm-12">
                   <h5>Primer Vencimiento </h5>
-                  <h4>{{$factura->primer_vto_fecha}}</h4>
+                  <h4>{{ $factura->primer_vto_fecha instanceof \Carbon\Carbon ? $factura->primer_vto_fecha->format('d/m/Y') : $factura->primer_vto_fecha }}</h4>
                   
                   <br>
                   <h5>Segundo Vencimiento </h5>
-                  <h4>{{$factura->segundo_vto_fecha}}</h4>
+                  <h4>{{ $factura->segundo_vto_fecha instanceof \Carbon\Carbon ? $factura->segundo_vto_fecha->format('d/m/Y') : $factura->segundo_vto_fecha }}</h4>
 
                   @if($factura->tercer_vto_importe > 0)
                     <br>
                     <h5>Tercer Vencimiento </h5>
-                    <h4>{{$factura->tercer_vto_fecha}}</h4>
+                    <h4>{{ $factura->tercer_vto_fecha instanceof \Carbon\Carbon ? $factura->tercer_vto_fecha->format('d/m/Y') : $factura->tercer_vto_fecha }}</h4>
                   @endif
 
                 </div>

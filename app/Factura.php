@@ -76,4 +76,34 @@ class Factura extends Model implements AuditableContract
     {
         return $this->hasMany('App\BonificacionPuntual', 'factura_id');
     }
+
+    /**
+     * Formatear fecha de primer vencimiento para mostrar en vistas
+     */
+    public function getPrimerVtoFechaFormattedAttribute()
+    {
+        return $this->primer_vto_fecha instanceof \Carbon\Carbon 
+            ? $this->primer_vto_fecha->format('d/m/Y') 
+            : $this->primer_vto_fecha;
+    }
+
+    /**
+     * Formatear fecha de segundo vencimiento para mostrar en vistas
+     */
+    public function getSegundoVtoFechaFormattedAttribute()
+    {
+        return $this->segundo_vto_fecha instanceof \Carbon\Carbon 
+            ? $this->segundo_vto_fecha->format('d/m/Y') 
+            : $this->segundo_vto_fecha;
+    }
+
+    /**
+     * Formatear fecha de tercer vencimiento para mostrar en vistas
+     */
+    public function getTercerVtoFechaFormattedAttribute()
+    {
+        return $this->tercer_vto_fecha instanceof \Carbon\Carbon 
+            ? $this->tercer_vto_fecha->format('d/m/Y') 
+            : $this->tercer_vto_fecha;
+    }
 }

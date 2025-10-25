@@ -101,6 +101,10 @@ class MercadoPagoService implements PaymentServiceInterface
             
             // ID de referencia externa (ID de la factura + vencimiento)
             $preference->external_reference = $paymentData['external_reference'];
+            // Configurar fechas de expiración si se proporciona la fecha de vencimiento
+            if (isset($paymentData['due_date']) && !empty($paymentData['due_date'])) {
+                $this->configureExpirationDates($preference, $paymentData['due_date']);
+            }
 
             // Guardar la preferencia
             $preference->save();
@@ -287,6 +291,68 @@ class MercadoPagoService implements PaymentServiceInterface
                 'success' => false,
                 'error' => $e->getMessage()
             ];
+        }
+    }
+
+    /**
+     * Configurar fechas de expiración para la preferencia de MercadoPago
+     *
+     * @param Preference $preference
+     * @param string $dueDate Fecha de vencimiento en formato d/m/Y
+     */
+    protected function configureExpirationDates($preference, $dueDate)
+    {
+        try {
+            // Si no hay fecha de vencimiento, no configurar expiración
+            if (empty($dueDate)) {
+                Log::info('No se configurará expiración - fecha de vencimiento vacía');
+                return;
+            }
+
+            // Manejar si ya es un objeto Carbon o convertir si es string
+            if ($dueDate instanceof \Carbon\Carbon) {
+                $dueDateCarbon = $dueDate;
+            } elseif (is_string($dueDate)) {
+                // Intentar primero formato d/m/Y, luego parse genérico
+                try {
+                    $dueDateCarbon = \Carbon\Carbon::createFromFormat('d/m/Y', $dueDate);
+                } catch (\Exception $e) {
+                    $dueDateCarbon = \Carbon\Carbon::parse($dueDate);
+                }
+            } else {
+                throw new \Exception('Formato de fecha no soportado: ' . gettype($dueDate));
+            }
+            
+            // La preferencia debe expirar al final del día de vencimiento
+            $expirationDateTime = $dueDateCarbon->endOfDay();
+            
+            // Configurar fecha de expiración (siempre, incluso si es en el pasado - MercadoPago lo manejará)
+            $preference->expires = true;
+            $preference->expiration_date_to = $expirationDateTime->toIso8601String();
+            
+            // La fecha desde puede ser desde ahora
+            $preference->expiration_date_from = \Carbon\Carbon::now()->toIso8601String();
+            
+            $now = \Carbon\Carbon::now();
+            $isExpired = $now->gt($expirationDateTime);
+            
+            Log::info('Configurando fechas de expiración para MercadoPago', [
+                'due_date_original' => $dueDate,
+                'expiration_date_from' => $preference->expiration_date_from,
+                'expiration_date_to' => $preference->expiration_date_to,
+                'is_already_expired' => $isExpired,
+                'message' => $isExpired ? 'QR generado pero ya expirado - MercadoPago no permitirá el pago' : 'QR válido hasta la fecha de vencimiento'
+            ]);
+            
+        } catch (Exception $e) {
+            Log::warning('Error configurando fechas de expiración: ' . $e->getMessage(), [
+                'due_date' => $dueDate
+            ]);
+            
+            // En caso de error, configurar expiración por defecto (30 días)
+            $preference->expires = true;
+            $preference->expiration_date_from = \Carbon\Carbon::now()->toIso8601String();
+            $preference->expiration_date_to = \Carbon\Carbon::now()->addDays(30)->endOfDay()->toIso8601String();
         }
     }
 }

@@ -1125,6 +1125,9 @@ class ClientController extends Controller
         $user->password = Hash::make($request->dni);
         $user->remember_token = str_random(60);
         $user->status = $request->has('status') ? 1 : 0;
+        
+        // Activar automÃ¡ticamente el cliente al crearlo desde el admin
+        $user->fecha_registro = Carbon::now();
 
         // datos tecnicos
         if($request->drop != ''){$user->drop = $request->drop;}
@@ -1553,6 +1556,9 @@ class ClientController extends Controller
         $clientRole = Role::where('name', 'client')->first();
         $users = $clientRole ? $clientRole->users()->get() : collect([]);
         
+        // Inicializar el array de clientes
+        $clients = [];
+        
         if (count($users)) {
 
             foreach ($users as $user) {
@@ -1565,10 +1571,11 @@ class ClientController extends Controller
 
             }
 
-        }else{
-
-            $clients = 'null';
-
+        }
+        
+        // Si no hay clientes, retornar 'null' como string para el JavaScript
+        if (empty($clients)) {
+            return 'null';
         }
 
         return $clients;
@@ -1582,8 +1589,17 @@ class ClientController extends Controller
         $clientRole = Role::where('name', 'client')->first();
         $users = $clientRole ? $clientRole->users()->get() : collect([]);
         
+        // Inicializar arrays
+        $user_fact = [];
+        $clients = [];
+        
         // get last periodo facturado
-        $last_periodo = Factura::orderBy('id', 'DESC')->first()->periodo;
+        $lastFactura = Factura::orderBy('id', 'DESC')->first();
+        if (!$lastFactura) {
+            return 'null';
+        }
+        
+        $last_periodo = $lastFactura->periodo;
 
         // get all users facturados
         $users_facturados = Factura::where('periodo', $last_periodo)->get(['user_id']);
@@ -1644,10 +1660,11 @@ class ClientController extends Controller
 
             endforeach;
 
-        }else{
-            
-            $clients = 'null';
+        }
         
+        // Si no hay clientes, retornar 'null' como string para el JavaScript
+        if (empty($clients)) {
+            return 'null';
         }
 
         return $clients;
@@ -2132,12 +2149,12 @@ class ClientController extends Controller
 
     public function zerofill($num, $zerofill = 8)
     {
-        // ?? SOLUCIÓN: Verificar si es numérico antes de aplicar zerofill
+        // ?? SOLUCIï¿½N: Verificar si es numï¿½rico antes de aplicar zerofill
     	if (is_numeric($num)) {
     	    return str_pad($num, $zerofill, '0', STR_PAD_LEFT);
     	}
     
-   	 // Si es alfanumérico, devolver tal como está
+   	 // Si es alfanumï¿½rico, devolver tal como estï¿½
     	return $num;
     }
 
@@ -2243,14 +2260,14 @@ class ClientController extends Controller
 
     public function billPayMp(Request $request, $id)
     {
-        // Lógica para procesar el pago con Mercado Pago
+        // Lï¿½gica para procesar el pago con Mercado Pago
         $factura = Factura::find($id);
 
         if (!$factura) {
             return response()->json(['error' => 'Factura no encontrada'], 404);
         }
 
-        // Aquí iría la lógica para procesar el pago con Mercado Pago
+        // Aquï¿½ irï¿½a la lï¿½gica para procesar el pago con Mercado Pago
         $now = Carbon::now();
 
         if ($now->lte(Carbon::parse($factura->primer_vto_fecha))) {
@@ -2260,8 +2277,9 @@ class ClientController extends Controller
             $vencimiento = 'segundo';
             $importe = $factura->segundo_vto_importe;
         } else {
-            $vencimiento = 'tercero';
-            $importe = $factura->tercero_vto_importe;
+            // Si todas las fechas estÃ¡n vencidas, usar el segundo vencimiento
+            $vencimiento = 'segundo';
+            $importe = $factura->segundo_vto_importe;
         }
         $paymentPreference = PaymentPreference::where('factura_id', $factura->id)
             ->where('vencimiento_tipo', $vencimiento)

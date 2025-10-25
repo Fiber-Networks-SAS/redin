@@ -42,6 +42,13 @@ class PaymentQRService
                 throw new Exception("Tipo de vencimiento inválido: {$vencimientoTipo}");
             }
 
+            // Log info sobre la generación del QR (siempre se genera, MercadoPago maneja la expiración)
+            Log::info("Generando QR - MercadoPago manejará la expiración automáticamente", [
+                'factura_id' => $factura->id,
+                'vencimiento_tipo' => $vencimientoTipo,
+                'due_date' => $paymentData['due_date']
+            ]);
+
             // Crear preferencia en MercadoPago
             $preferenceResult = $this->paymentService->createPaymentPreference($paymentData);
 
@@ -157,6 +164,7 @@ class PaymentQRService
                     'description' => $baseDescription . ' - Primer vencimiento',
                     'amount' => $this->parseAmount($factura->importe_total),
                     'external_reference' => $factura->id . '_primer_' . time(),
+                    'due_date' => $factura->primer_vto_fecha, // Fecha de vencimiento
                     'payer' => [
                         'name' => $factura->cliente ? $factura->cliente->firstname : 'Cliente',
                         'surname' => $factura->cliente ? $factura->cliente->lastname : 'Cliente',
@@ -174,6 +182,7 @@ class PaymentQRService
                     'description' => $baseDescription . ' - Segundo vencimiento con recargo',
                     'amount' => $this->parseAmount($factura->segundo_vto_importe),
                     'external_reference' => $factura->id . '_segundo_' . time(),
+                    'due_date' => $factura->segundo_vto_fecha, // Fecha de vencimiento
                     'payer' => [
                         'name' => $factura->cliente ? $factura->cliente->firstname : 'Cliente',
                         'surname' => $factura->cliente ? $factura->cliente->lastname : 'Cliente',
@@ -195,6 +204,7 @@ class PaymentQRService
                     'description' => $baseDescription . ' - Tercer vencimiento con recargo máximo',
                     'amount' => $this->parseAmount($factura->tercer_vto_importe),
                     'external_reference' => $factura->id . '_tercer_' . time(),
+                    'due_date' => $factura->tercer_vto_fecha, // Fecha de vencimiento
                     'payer' => [
                         'name' => $factura->cliente ? $factura->cliente->firstname : 'Cliente',
                         'surname' => $factura->cliente ? $factura->cliente->lastname : 'Cliente',
@@ -291,6 +301,8 @@ class PaymentQRService
 
         return $preferences;
     }
+
+
 
     /**
      * Convierte un valor que puede estar formateado con comas a un float válido

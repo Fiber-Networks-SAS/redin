@@ -32,7 +32,7 @@
 												<thead>
 													<tr style="background-color: #f8b540;">
 														<td style="width: 50%;padding: 2px 10px;font-size: 16px;color: #fff;">Período: {{$factura->periodo}}</td>
-														<td style="width: 50%;padding: 2px 10px;font-size: 16px;color: #fff;text-align: right;">Vencimiento: {{$factura->primer_vto_fecha}}</td>
+														<td style="width: 50%;padding: 2px 10px;font-size: 16px;color: #fff;text-align: right;">Vencimiento: {{ $factura->primer_vto_fecha instanceof \Carbon\Carbon ? $factura->primer_vto_fecha->format('d/m/Y') : $factura->primer_vto_fecha }}</td>
 													</tr>
 												</thead>
 												<tbody>

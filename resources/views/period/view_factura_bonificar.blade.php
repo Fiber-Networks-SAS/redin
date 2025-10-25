@@ -58,11 +58,11 @@
                     </tr>
                     <tr>
                       <th>Primer Vencimiento:</th>
-                      <td>{{$factura->primer_vto_fecha}}</td>
+                      <td>{{ $factura->primer_vto_fecha instanceof \Carbon\Carbon ? $factura->primer_vto_fecha->format('d/m/Y') : $factura->primer_vto_fecha }}</td>
                     </tr>
                     <tr>
                       <th>Segundo Vencimiento:</th>
-                      <td>{{$factura->segundo_vto_fecha}}</td>
+                      <td>{{ $factura->segundo_vto_fecha instanceof \Carbon\Carbon ? $factura->segundo_vto_fecha->format('d/m/Y') : $factura->segundo_vto_fecha }}</td>
                     </tr>
                     <tr>
                       <th>Subtotal:</th>

@@ -369,7 +369,7 @@
 
             <div class="darkness">
                 <p>Total a Pagar: ${{ safe_number_format($factura->importe_total) }}</p>
-                <p>Vencimiento: {{ $factura->primer_vto_fecha }}</p>
+                <p>Vencimiento: {{ $factura->primer_vto_fecha instanceof \Carbon\Carbon ? $factura->primer_vto_fecha->format('d/m/Y') : $factura->primer_vto_fecha }}</p>
                 <p>Período: {{ $factura->periodo }}</p>
             </div>
 
@@ -544,7 +544,7 @@
                     <div class="darkness">
                         <p>Importe: ${{ safe_number_format($factura->primer_vto_importe ?? $factura->importe_total) }}
                         </p>
-                        <p>Vencimiento: {{ $factura->primer_vto_fecha }}</p>
+                        <p>Vencimiento: {{ $factura->primer_vto_fecha instanceof \Carbon\Carbon ? $factura->primer_vto_fecha->format('d/m/Y') : $factura->primer_vto_fecha }}</p>
                     </div>
                 </div>
             </div>
@@ -567,7 +567,7 @@
                     <div class="darkness">
                         <p>Importe: ${{ safe_number_format($factura->segundo_vto_importe ?? $factura->importe_total) }}
                         </p>
-                        <p>Vencimiento: {{ $factura->segundo_vto_fecha }}</p>
+                        <p>Vencimiento: {{ $factura->segundo_vto_fecha instanceof \Carbon\Carbon ? $factura->segundo_vto_fecha->format('d/m/Y') : $factura->segundo_vto_fecha }}</p>
                     </div>
                 </div>
             </div>
