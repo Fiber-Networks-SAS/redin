@@ -10,13 +10,6 @@ class AfipService
 
     public function __construct()
     {
-        // Verificar si AFIP está habilitado mediante variable de entorno
-        if (!env('AFIP_ENABLED', true)) {
-            \Log::info('AFIP está deshabilitado por configuración de entorno');
-            $this->afip = null;
-            return;
-        }
-
         $certPath = storage_path('app/afip.crt');
         $keyPath = storage_path('app/afip.pem');
         
