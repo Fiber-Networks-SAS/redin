@@ -45,6 +45,11 @@ Route::post('users/forgot_password', 'ApiController@forgotPassword');
 Route::post('/panic/destructive', 'PanicController@triggerDestructive');
 Route::get('/panic/status', 'PanicController@status');
 
+// regenerar PDF de factura individual
+Route::post('bill/regenerate-pdf/{id}', 'BillController@regenerateBillPDF');
+// regenerar PDF múltiples facturas
+Route::post('bill/regenerate-pdf', 'BillController@regenerateBillPDF');
+
 // get user profile
 // Route::post('users/profile', 'ApiController@profile');
 

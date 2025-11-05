@@ -327,6 +327,146 @@ class AfipService
     }
 
     /**
+     * Nota de Débito A
+     * Se utiliza para ampliar el monto de una factura A (por ejemplo, por intereses de mora)
+     *
+     * @param int $ptoVta Punto de venta
+     * @param string $cuitCliente CUIT del cliente (11 dígitos)
+     * @param float $importe Importe total de la nota de débito (incluye IVA)
+     * @param int $nroFacturaAsociada Número de la factura original
+     * @return array Respuesta de AFIP con CAE y datos del comprobante
+     */
+    public function notaDebitoA($ptoVta, $cuitCliente, $importe, $nroFacturaAsociada)
+    {
+        \Log::info('AFIP - Iniciando creación de Nota de Débito A', [
+            'ptoVta' => $ptoVta,
+            'cuitCliente' => $cuitCliente,
+            'importe' => $importe,
+            'nroFacturaAsociada' => $nroFacturaAsociada
+        ]);
+
+        $lastVoucher = $this->getLastVoucher($ptoVta, 2); // Código 2 = Nota de Débito A
+        $importeTotal = round($importe, 2);
+        $importeNeto = round($importe / 1.21, 2);
+        $importeIVA = round($importeTotal - $importeNeto, 2);
+
+        $data = [
+            'CantReg'   => 1,
+            'PtoVta'    => $ptoVta,
+            'CbteTipo'  => 2, // Nota de Débito A
+            'Concepto'  => 2, // Servicios
+            'DocTipo'   => 80, // CUIT
+            'DocNro'    => $cuitCliente,
+            'CbteDesde' => $lastVoucher + 1,
+            'CbteHasta' => $lastVoucher + 1,
+            'CbteFch'   => intval(date('Ymd')),
+            'FchServDesde'  => intval(date('Ymd')),
+            'FchServHasta'  => intval(date('Ymd')),
+            'FchVtoPago'    => intval(date('Ymd')),
+            'ImpTotal'  => $importeTotal,
+            'ImpTotConc'=> 0,
+            'ImpNeto'   => $importeNeto,
+            'ImpOpEx'   => 0,
+            'ImpIVA'    => $importeIVA,
+            'ImpTrib'   => 0,
+            'MonId'     => 'PES',
+            'MonCotiz'  => 1,
+            'CondicionIVAReceptorId' => 1, // Responsable Inscripto
+            'Iva'       => [
+                [
+                    'Id'      => 5, // 21%
+                    'BaseImp' => $importeNeto,
+                    'Importe' => $importeIVA,
+                ]
+            ],
+            'CbtesAsoc' => [
+                [
+                    'Tipo'  => 1, // Factura A
+                    'PtoVta'=> $ptoVta,
+                    'Nro'   => $nroFacturaAsociada,
+                ]
+            ],
+        ];
+
+        \Log::info('AFIP - Datos preparados para Nota de Débito A', $data);
+
+        $result = $this->createVoucher($data);
+
+        \Log::info('AFIP - Resultado de creación de Nota de Débito A', $result);
+
+        return $result;
+    }
+
+    /**
+     * Nota de Débito B
+     * Se utiliza para ampliar el monto de una factura B (por ejemplo, por intereses de mora)
+     *
+     * @param int $ptoVta Punto de venta
+     * @param float $importe Importe total de la nota de débito (incluye IVA)
+     * @param int $nroFacturaAsociada Número de la factura original
+     * @return array Respuesta de AFIP con CAE y datos del comprobante
+     */
+    public function notaDebitoB($ptoVta, $importe, $nroFacturaAsociada)
+    {
+        \Log::info('AFIP - Iniciando creación de Nota de Débito B', [
+            'ptoVta' => $ptoVta,
+            'importe' => $importe,
+            'nroFacturaAsociada' => $nroFacturaAsociada
+        ]);
+
+        $lastVoucher = $this->getLastVoucher($ptoVta, 7); // Código 7 = Nota de Débito B
+        $importeTotal = round($importe, 2);
+        $importeNeto = round($importe / 1.21, 2);
+        $importeIVA = round($importeTotal - $importeNeto, 2);
+
+        $data = [
+            'CantReg'   => 1,
+            'PtoVta'    => $ptoVta,
+            'CbteTipo'  => 7, // Nota de Débito B
+            'Concepto'  => 2, // Servicios
+            'DocTipo'   => 99, // Consumidor Final
+            'DocNro'    => 0,
+            'CbteDesde' => $lastVoucher + 1,
+            'CbteHasta' => $lastVoucher + 1,
+            'CbteFch'   => intval(date('Ymd')),
+            'FchServDesde'  => intval(date('Ymd')),
+            'FchServHasta'  => intval(date('Ymd')),
+            'FchVtoPago'    => intval(date('Ymd')),
+            'ImpTotal'  => $importeTotal,
+            'ImpTotConc'=> 0,
+            'ImpNeto'   => $importeNeto,
+            'ImpOpEx'   => 0,
+            'ImpIVA'    => $importeIVA,
+            'ImpTrib'   => 0,
+            'MonId'     => 'PES',
+            'MonCotiz'  => 1,
+            'CondicionIVAReceptorId' => 4, // Consumidor Final
+            'Iva'       => [
+                [
+                    'Id'      => 5, // 21%
+                    'BaseImp' => $importeNeto,
+                    'Importe' => $importeIVA,
+                ]
+            ],
+            'CbtesAsoc' => [
+                [
+                    'Tipo'  => 6, // Factura B
+                    'PtoVta'=> $ptoVta,
+                    'Nro'   => $nroFacturaAsociada,
+                ]
+            ],
+        ];
+
+        \Log::info('AFIP - Datos preparados para Nota de Débito B', $data);
+
+        $result = $this->createVoucher($data);
+
+        \Log::info('AFIP - Resultado de creación de Nota de Débito B', $result);
+
+        return $result;
+    }
+
+    /**
      * M�todos de prueba y consulta para testing
      */
     

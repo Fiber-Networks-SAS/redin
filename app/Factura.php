@@ -72,6 +72,11 @@ class Factura extends Model implements AuditableContract
         return $this->hasMany('App\NotaCredito', 'factura_id');
     }
 
+    public function notaDebito()
+    {
+        return $this->hasMany('App\NotaDebito', 'factura_id');
+    }
+
     public function bonificacionesPuntuales()
     {
         return $this->hasMany('App\BonificacionPuntual', 'factura_id');
@@ -105,5 +110,13 @@ class Factura extends Model implements AuditableContract
         return $this->tercer_vto_fecha instanceof \Carbon\Carbon 
             ? $this->tercer_vto_fecha->format('d/m/Y') 
             : $this->tercer_vto_fecha;
+    }
+
+    /**
+     * Calcular el importe original de la factura (antes de bonificaciones)
+     */
+    public function getImporteOriginalAttribute()
+    {
+        return $this->importe_subtotal + $this->importe_subtotal_iva;
     }
 }

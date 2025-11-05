@@ -19,6 +19,8 @@ class Kernel extends ConsoleKernel
         Commands\QuickInvoice::class,
         Commands\ListUsers::class,
         Commands\CheckQRCodes::class,
+        Commands\SimulateLastPaymentWebhook::class,
+        Commands\RegenerateInvoicePDF::class,
     ];
 
     /**

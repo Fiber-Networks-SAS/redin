@@ -277,9 +277,17 @@ class BillController extends Controller
             $filename = $factura->talonario->nro_punto_vta . '-' . $factura->nro_factura;
             $factura->pdf = $request->root() . '/' . config('constants.folder_facturas') . 'factura-' . $filename . '.pdf';
 
+            // Cargar notas de crédito y débito
+            $notasCredito = $factura->notaCredito;
+            $notasDebito = $factura->notaDebito;
+
             // return $factura;
 
-            return View::make('period.view_factura')->with(['factura' => $factura]);
+            return View::make('period.view_factura')->with([
+                'factura' => $factura,
+                'notasCredito' => $notasCredito,
+                'notasDebito' => $notasDebito
+            ]);
         } else {
 
             return back()->withInput()->with(['status' => 'danger', 'message' => 'Ha ocurrido un error, la factura no existe.', 'icon' => 'fa-frown-o']);
@@ -3151,5 +3159,245 @@ class BillController extends Controller
             'bonificacion_total' => $bonificacion_total,
             'detalles' => $detalles_bonificados
         ];
+    }
+
+    /**
+     * Regenerar PDF de facturas - admite ID individual o array de IDs
+     * Endpoint para uso sin SSH - regenera el PDF tal como lo haría el proceso normal
+     * 
+     * @param Request $request
+     * @param int|null $id ID de la factura (opcional si se envía en el body)
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function regenerateBillPDF(Request $request, $id = null)
+    {
+        try {
+            // Obtener IDs desde la URL o desde el body del request
+            $facturaIds = [];
+            
+            if ($id !== null) {
+                // ID desde la URL
+                $facturaIds = [$id];
+            } elseif ($request->has('factura_ids')) {
+                // Array de IDs desde el body
+                $facturaIds = $request->input('factura_ids');
+                if (!is_array($facturaIds)) {
+                    $facturaIds = [$facturaIds];
+                }
+            } elseif ($request->has('factura_id')) {
+                // ID individual desde el body
+                $facturaIds = [$request->input('factura_id')];
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'ID de factura requerido.',
+                    'error' => 'Debe proporcionar factura_id o factura_ids en el request.'
+                ], 400);
+            }
+
+            // Validar que todos los IDs sean numéricos
+            foreach ($facturaIds as $facturaId) {
+                if (!is_numeric($facturaId)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'ID de factura inválido.',
+                        'error' => "El ID '{$facturaId}' debe ser un número válido."
+                    ], 400);
+                }
+            }
+
+            // Limitar cantidad para evitar timeouts
+            if (count($facturaIds) > 100) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Demasiadas facturas solicitadas.',
+                    'error' => 'Máximo 100 facturas por request. Total solicitadas: ' . count($facturaIds)
+                ], 400);
+            }
+
+            $resultados = [];
+            $exitosas = 0;
+            $fallidas = 0;
+            $startTime = microtime(true);
+
+            Log::info("Iniciando regeneración masiva de PDFs", [
+                'total_facturas' => count($facturaIds),
+                'facturas_ids' => $facturaIds
+            ]);
+
+            foreach ($facturaIds as $facturaId) {
+                try {
+                    $resultado = $this->procesarFacturaIndividual($request, $facturaId);
+                    $resultados[] = $resultado;
+                    
+                    if ($resultado['success']) {
+                        $exitosas++;
+                    } else {
+                        $fallidas++;
+                    }
+                    
+                } catch (Exception $e) {
+                    $fallidas++;
+                    $resultados[] = [
+                        'success' => false,
+                        'factura_id' => $facturaId,
+                        'message' => 'Error inesperado al procesar factura.',
+                        'error' => $e->getMessage()
+                    ];
+                    
+                    Log::error("Error inesperado procesando factura ID: {$facturaId}", [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                }
+            }
+
+            $endTime = microtime(true);
+            $totalTime = round($endTime - $startTime, 2);
+
+            Log::info("Regeneración masiva completada", [
+                'total_facturas' => count($facturaIds),
+                'exitosas' => $exitosas,
+                'fallidas' => $fallidas,
+                'tiempo_total' => $totalTime . ' segundos'
+            ]);
+
+            // Respuesta individual vs masiva
+            if (count($facturaIds) === 1) {
+                // Para una sola factura, retornar el formato original
+                return response()->json($resultados[0], $resultados[0]['success'] ? 200 : ($resultados[0]['status_code'] ?? 500));
+            } else {
+                // Para múltiples facturas, retornar resumen + detalles
+                return response()->json([
+                    'success' => $fallidas === 0,
+                    'message' => "Procesamiento completado: {$exitosas} exitosas, {$fallidas} fallidas de " . count($facturaIds) . " facturas.",
+                    'summary' => [
+                        'total_requested' => count($facturaIds),
+                        'successful' => $exitosas,
+                        'failed' => $fallidas,
+                        'success_rate' => count($facturaIds) > 0 ? round(($exitosas / count($facturaIds)) * 100, 2) : 0,
+                        'processing_time' => $totalTime . ' segundos',
+                        'processed_at' => date('Y-m-d H:i:s')
+                    ],
+                    'results' => $resultados
+                ], 200);
+            }
+
+        } catch (Exception $e) {
+            Log::error("Error crítico en regeneración masiva de PDFs", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error crítico en el procesamiento.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Procesar una factura individual para regeneración de PDF
+     * 
+     * @param Request $request
+     * @param int $id
+     * @return array
+     */
+    private function procesarFacturaIndividual(Request $request, $id)
+    {
+        try {
+            // Buscar la factura con todas sus relaciones necesarias
+            $factura = Factura::with([
+                'talonario', 
+                'cliente', 
+                'detalle.servicio', 
+                'notaCredito', 
+                'bonificacionesPuntuales'
+            ])->find($id);
+
+            if (!$factura) {
+                return [
+                    'success' => false,
+                    'factura_id' => $id,
+                    'message' => 'Factura no encontrada.',
+                    'error' => "No se encontró una factura con ID: {$id}",
+                    'status_code' => 404
+                ];
+            }
+
+            // Formatear los campos necesarios
+            $factura->talonario->nro_punto_vta = $this->zerofill($factura->talonario->nro_punto_vta, 4);
+            $factura->nro_factura = $this->zerofill($factura->nro_factura);
+            $factura->nro_cliente = $this->zerofill($factura->nro_cliente, 5);
+
+            // Formatear fechas
+            $factura->fecha_emision = Carbon::parse($factura->fecha_emision)->format('d/m/Y');
+            $factura->primer_vto_fecha = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
+            $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
+            $factura->tercer_vto_fecha = $factura->tercer_vto_fecha ? Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y') : '';
+
+            // Generar nombre de archivo y path
+            $factura->filename = $factura->talonario->nro_punto_vta . '-' . $factura->nro_factura;
+            $factura->filePath = public_path(config('constants.folder_facturas') . 'factura-' . $factura->filename . '.pdf');
+            
+            // URL pública del PDF
+            $publicUrl = $request->root() . '/' . config('constants.folder_facturas') . 'factura-' . $factura->filename . '.pdf';
+
+            // Asegurar que el directorio existe
+            $directory = dirname($factura->filePath);
+            if (!file_exists($directory)) {
+                mkdir($directory, 0755, true);
+            }
+
+            // Procesar detalles de la factura
+            foreach ($factura->detalle as $detalle) {
+                $detalle->servicio; // Cargar relación servicio
+            }
+
+            // Regenerar códigos QR de MercadoPago para cada vencimiento
+            try {
+                $this->generatePaymentQRCodes($factura);
+            } catch (Exception $e) {
+                // Log del error pero continuar con la generación del PDF
+                Log::warning("Error generando códigos QR para factura ID: {$id}. Error: " . $e->getMessage());
+            }
+
+            // Crear y guardar el PDF
+            $pdf = PDF::loadView('pdf.facturas', ['facturas' => [$factura]]);
+            $pdf->save($factura->filePath);
+
+            // Verificar que el archivo se creó correctamente
+            if (!file_exists($factura->filePath)) {
+                throw new Exception('El archivo PDF no se pudo crear en la ruta especificada.');
+            }
+
+            $fileSize = filesize($factura->filePath);
+
+            return [
+                'success' => true,
+                'factura_id' => $factura->id,
+                'message' => 'PDF regenerado exitosamente.',
+                'data' => [
+                    'factura_id' => $factura->id,
+                    'numero_factura' => $factura->talonario->letra . ' ' . $factura->talonario->nro_punto_vta . '-' . $factura->nro_factura,
+                    'cliente' => $factura->cliente->firstname . ' ' . $factura->cliente->lastname,
+                    'periodo' => $factura->periodo,
+                    'filename' => $factura->filename . '.pdf',
+                    'file_path' => $factura->filePath,
+                    'file_size' => $fileSize,
+                    'public_url' => $publicUrl,
+                    'generated_at' => date('Y-m-d H:i:s')
+                ]
+            ];
+
+        } catch (Exception $e) {
+            return [
+                'success' => false,
+                'factura_id' => $id,
+                'message' => 'Error al regenerar PDF.',
+                'error' => $e->getMessage()
+            ];
+        }
     }
 }

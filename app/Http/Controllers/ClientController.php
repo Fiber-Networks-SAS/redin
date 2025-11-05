@@ -38,6 +38,7 @@ use App\PaymentPreference;
 // use Entrust;
 use PDF;
 use Carbon\Carbon;
+    use App\Services\MercadoPagoService;
 
 
 
@@ -605,14 +606,22 @@ class ClientController extends Controller
                 $detalle->servicio;
             }            
 
-                        
+
             // genero los PDF's de las facturas individuales
             $filename = $factura->talonario->nro_punto_vta.'-'.$factura->nro_factura;
             $factura->pdf = $request->root().'/'.config('constants.folder_facturas') . 'factura-'.$filename.'.pdf';
 
+            // Cargar notas de crédito y débito
+            $notasCredito = $factura->notaCredito;
+            $notasDebito = $factura->notaDebito;
+
             // return $factura;
 
-            return View::make('client.view_factura')->with(['factura' => $factura]);
+            return View::make('client.view_factura')->with([
+                'factura' => $factura,
+                'notasCredito' => $notasCredito,
+                'notasDebito' => $notasDebito
+            ]);
 
         }else{
             
@@ -2289,6 +2298,174 @@ class ClientController extends Controller
             return redirect($paymentPreference->init_point);
         } else {
             return response()->json(['error' => 'Enlace de pago no encontrado o factura vencida'], 404);
+        }
+    }
+
+    /**
+     * Método para iniciar el pago de una factura desde el dashboard del cliente
+     * Calcula intereses si es necesario y muestra cartel de advertencia
+     */
+    public function pay($facturaId)
+    {
+        $user = Auth::user();
+        $factura = Factura::find($facturaId);
+
+        // Verificar que la factura pertenece al usuario y no está pagada
+        if (!$factura || $factura->user_id != $user->id || $factura->fecha_pago) {
+            return redirect('/my-invoice')->with(['status' => 'danger', 'message' => 'Factura no encontrada o ya pagada.', 'icon' => 'fa-frown-o']);
+        }
+
+        $fechaActual = Carbon::now();
+        $tipoVencimiento = $this->determinarTipoVencimiento($factura, $fechaActual);
+
+        // Calcular importe correspondiente
+        $importeTotal = $this->calcularImporteCorrespondienteCliente($factura, $fechaActual->format('Y-m-d'));
+        
+        // Calcular intereses y días de mora
+        $intereses = 0;
+        $diasMora = 0;
+        $tasaInteres = 0;
+        
+        if ($tipoVencimiento == 'tercer') {
+            $segundoVtoFecha = Carbon::parse($factura->segundo_vto_fecha);
+            $diasMora = $segundoVtoFecha->diffInDays($fechaActual) + 1;
+            $interes = Interes::find(1);
+            $tasaInteres = $interes ? $interes->tercer_vto_tasa : 0;
+            $intereses = round(($factura->segundo_vto_importe * $diasMora * $tasaInteres / 100), 2);
+        }
+
+        // Formatear datos para la vista
+        $factura->talonario;
+        $factura->talonario->nro_punto_vta = $this->zerofill($factura->talonario->nro_punto_vta, 4);
+        $factura->nro_factura = $this->zerofill($factura->nro_factura);
+        $factura->cliente;
+
+        return \View::make('client.pay_invoice', compact(
+            'factura',
+            'tipoVencimiento',
+            'importeTotal',
+            'intereses',
+            'diasMora',
+            'tasaInteres'
+        ));
+    }
+
+    /**
+     * Calcular el importe correspondiente según la fecha de pago (versión para cliente)
+     */
+    protected function calcularImporteCorrespondienteCliente(Factura $factura, $fechaPago)
+    {
+        $fechaPagoCarbon = Carbon::parse($fechaPago);
+
+        // Obtener fechas de vencimiento
+        $primerVtoFecha = Carbon::parse($factura->primer_vto_fecha);
+        $segundoVtoFecha = Carbon::parse($factura->segundo_vto_fecha);
+
+        // Si paga en o antes del primer vencimiento → importe original
+        if ($fechaPagoCarbon->lte($primerVtoFecha)) {
+            return $factura->importe_total;
+        }
+
+        // Si paga en o antes del segundo vencimiento → importe con recargo del segundo vencimiento
+        if ($fechaPagoCarbon->lte($segundoVtoFecha)) {
+            return $factura->segundo_vto_importe;
+        }
+
+        // Si paga después del segundo vencimiento → calcular interés diario
+        $interes = Interes::find(1);
+        if (!$interes || !$interes->tercer_vto_tasa) {
+            return $factura->segundo_vto_importe;
+        }
+
+        // Calcular días transcurridos desde el segundo vencimiento
+        $diasExcedentes = $segundoVtoFecha->diffInDays($fechaPagoCarbon) + 1;
+
+        // Calcular tasa acumulada (tasa diaria * días)
+        $tasaAcumulada = $diasExcedentes * $interes->tercer_vto_tasa;
+
+        // Calcular importe final con interés diario sobre el importe del segundo vencimiento
+        $importeConInteres = round(($factura->segundo_vto_importe * $tasaAcumulada / 100) + $factura->segundo_vto_importe, 2);
+
+        return $importeConInteres;
+    }
+
+    /**
+     * Procesar el pago confirmado por el cliente (crear preference de MercadoPago)
+     */
+    public function processPayment(Request $request, $facturaId)
+    {
+        $user = Auth::user();
+        $factura = Factura::find($facturaId);
+
+        // Verificar que la factura pertenece al usuario y no está pagada
+        if (!$factura || $factura->user_id != $user->id || $factura->fecha_pago) {
+            return redirect('/my-invoice')->with(['status' => 'danger', 'message' => 'Factura no encontrada o ya pagada.', 'icon' => 'fa-frown-o']);
+        }
+
+        $fechaActual = Carbon::now();
+        $tipoVencimiento = $this->determinarTipoVencimiento($factura, $fechaActual);
+
+        // Calcular el importe correspondiente
+        $importeCalculado = $this->calcularImporteCorrespondienteCliente($factura, $fechaActual->format('Y-m-d'));
+
+        // Preparar datos para MercadoPago (igual que en PaymentQRService)
+        $puntoVenta = $factura->talonario ? $factura->talonario->nro_punto_vta : '0001';
+        $clienteName = $factura->cliente ? ($factura->cliente->firstname . ' ' . $factura->cliente->lastname) : 'Cliente';
+
+        $baseTitle = "Factura {$puntoVenta}-{$factura->nro_factura}";
+        $baseDescription = "Pago de factura periodo {$factura->periodo} - Cliente: {$clienteName}";
+
+        $paymentData = [
+            'title' => $baseTitle . ' - ' . ucfirst($tipoVencimiento) . ' Vencimiento',
+            'description' => $baseDescription . ' - ' . ucfirst($tipoVencimiento) . ' vencimiento',
+            'amount' => $importeCalculado,
+            'external_reference' => $factura->id . '_' . $tipoVencimiento . '_' . time(),
+            'due_date' => $tipoVencimiento === 'primer' ? $factura->primer_vto_fecha :
+                         ($tipoVencimiento === 'segundo' ? $factura->segundo_vto_fecha : $factura->tercer_vto_fecha),
+            'payer' => [
+                'name' => $factura->cliente ? $factura->cliente->firstname : 'Cliente',
+                'surname' => $factura->cliente ? $factura->cliente->lastname : 'Cliente',
+                'email' => ($factura->cliente && $factura->cliente->email) ? $factura->cliente->email : 'administracion@redin.com.ar',
+                'identification' => [
+                    'type' => 'DNI',
+                    'number' => ($factura->cliente && $factura->cliente->dni) ? $factura->cliente->dni : '00000000'
+                ]
+            ]
+        ];
+
+        // Usar MercadoPagoService para crear la preferencia real
+        $mercadoPagoService = app(MercadoPagoService::class);
+        $preferenceResult = $mercadoPagoService->createPaymentPreference($paymentData);
+
+        if (!$preferenceResult['success']) {
+            return redirect('/my-invoice')->with(['status' => 'danger', 'message' => 'Error al crear el enlace de pago. Intente nuevamente.', 'icon' => 'fa-frown-o']);
+        }
+
+        // Crear PaymentPreference en la base de datos
+        $paymentPreference = new PaymentPreference();
+        $paymentPreference->factura_id = $factura->id;
+        $paymentPreference->amount = $importeCalculado;
+        $paymentPreference->vencimiento_tipo = $tipoVencimiento;
+        $paymentPreference->preference_id = $preferenceResult['preference_id'];
+        $paymentPreference->init_point = $preferenceResult['init_point'];
+        $paymentPreference->external_reference = $paymentData['external_reference'];
+        $paymentPreference->status = 'pending';
+        $paymentPreference->save();
+
+        return redirect($preferenceResult['init_point']);
+    }
+
+    /**
+     * Determinar el tipo de vencimiento según la fecha actual
+     */
+    protected function determinarTipoVencimiento(Factura $factura, Carbon $fechaActual)
+    {
+        if ($fechaActual->lte(Carbon::parse($factura->primer_vto_fecha))) {
+            return 'primer';
+        } elseif ($fechaActual->lte(Carbon::parse($factura->segundo_vto_fecha))) {
+            return 'segundo';
+        } else {
+            return 'tercer';
         }
     }
 }

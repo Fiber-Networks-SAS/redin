@@ -5,8 +5,12 @@ namespace App\Http\Controllers;
 use App\Contracts\PaymentServiceInterface;
 use App\PaymentPreference;
 use App\Factura;
+use App\Interes;
+use App\NotaDebito;
+use App\Services\AfipService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 use Exception;
 
 class PaymentController extends Controller
@@ -140,22 +144,19 @@ class PaymentController extends Controller
     protected function validateMercadoPagoWebhook(Request $request)
     {
         $userAgent = $request->header('User-Agent');
-        
+
         // MercadoPago usa un User-Agent específico para sus webhooks
         if (empty($userAgent) || strpos($userAgent, 'MercadoPago') === false) {
             return false;
         }
 
-        // Validar que tenga estructura de webhook válida
+        // Si tiene 'type', validar que sea un tipo permitido
         $data = $request->all();
-        if (!isset($data['type']) || !isset($data['data']['id'])) {
-            return false;
-        }
-
-        // Validar tipos de webhook permitidos
-        $allowedTypes = ['payment', 'plan', 'subscription', 'invoice'];
-        if (!in_array($data['type'], $allowedTypes)) {
-            return false;
+        if (isset($data['type'])) {
+            $allowedTypes = ['payment', 'plan', 'subscription', 'invoice'];
+            if (!in_array($data['type'], $allowedTypes)) {
+                return false;
+            }
         }
 
         // Validar rangos de IP de MercadoPago (opcional pero recomendado)
@@ -167,11 +168,9 @@ class PaymentController extends Controller
         //         return false;
         //     }
         // }
-        
-        return true;
-    }
 
-    /**
+        return true;
+    }    /**
      * Validar si la IP pertenece a MercadoPago
      */
     protected function isValidMercadoPagoIP($ip)
@@ -219,7 +218,7 @@ class PaymentController extends Controller
             // Si recibimos solo el ID, obtener la información completa
             if (is_string($paymentInfo)) {
                 $paymentStatus = $this->paymentService->getPaymentStatus($paymentInfo);
-                
+
                 if (!$paymentStatus['success']) {
                     throw new Exception('No se pudo obtener información del pago: ' . $paymentStatus['error']);
                 }
@@ -230,18 +229,16 @@ class PaymentController extends Controller
 
             // Buscar la preferencia de pago por external_reference
             $externalReference = $paymentStatus['external_reference'];
-            
+
             if (empty($externalReference)) {
                 throw new Exception('External reference no encontrada en el pago');
             }
 
             $paymentPreference = PaymentPreference::where('external_reference', $externalReference)->first();
-            
+
             if (!$paymentPreference) {
                 throw new Exception('Preferencia de pago no encontrada para external_reference: ' . $externalReference);
-            }
-
-            // Solo procesar si el pago está aprobado
+            }            // Solo procesar si el pago está aprobado
             if ($paymentStatus['status'] === 'approved') {
                 // Marcar la preferencia como pagada
                 $paymentPreference->markAsPaid($paymentStatus['payment_id']);
@@ -270,21 +267,260 @@ class PaymentController extends Controller
     /**
      * Actualizar estado de pago de la factura
      */
-    protected function updateFacturaPaymentStatus(Factura $factura, PaymentPreference $paymentPreference, $paymentStatus)
+    public function updateFacturaPaymentStatus(Factura $factura, PaymentPreference $paymentPreference, $paymentStatus, $force = false)
     {
         try {
-            // Verificar si la factura no tiene pago registrado aún
-            if (empty($factura->fecha_pago)) {
-                $factura->fecha_pago = date('Y-m-d');
-                $factura->importe_pago = $paymentStatus['transaction_amount'];
+            // DEBUG: Mostrar todos los parámetros recibidos
+            Log::info("DEBUG updateFacturaPaymentStatus called", [
+                'factura_id' => $factura->id,
+                'factura_fecha_pago' => $factura->fecha_pago,
+                'factura_importe_pago' => $factura->importe_pago,
+                'payment_preference_amount' => $paymentPreference->amount,
+                'payment_status' => $paymentStatus,
+                'force' => $force
+            ]);
+
+            // Verificar si la factura no tiene pago registrado aún, o si se fuerza el procesamiento
+            if (empty($factura->fecha_pago) || $force) {
+                Log::info("Factura procesando pago (force: " . ($force ? 'SÍ' : 'NO') . ")");
+
+                $fechaPago = date('Y-m-d');
+                $importePagado = $paymentStatus['transaction_amount'];
+
+                // Para webhooks simulados (como nuestro comando), usar directamente el importe pagado
+                // Para webhooks reales, validar que coincida con la payment preference
+                $esSimulacion = isset($paymentStatus['simulated']) && $paymentStatus['simulated'];
+
+                Log::info("Es simulación: " . ($esSimulacion ? 'SÍ' : 'NO'));
+
+                if ($esSimulacion) {
+                    // Simulación: usar directamente el importe pagado
+                    Log::info("Procesando pago SIMULADO de factura {$factura->id}", [
+                        'importe_factura_original' => $factura->importe_total,
+                        'importe_pagado' => $importePagado,
+                        'fecha_pago' => $fechaPago
+                    ]);
+                } else {
+                    // Webhook real: validar que el importe pagado coincida con la payment preference
+                    $importeEsperado = $paymentPreference->amount;
+
+                    if (abs($importePagado - $importeEsperado) > 0.01) {
+                        Log::warning("Importe pagado no coincide con payment preference", [
+                            'factura_id' => $factura->id,
+                            'importe_pagado' => $importePagado,
+                            'importe_esperado' => $importeEsperado,
+                            'diferencia' => abs($importePagado - $importeEsperado)
+                        ]);
+                        // En webhooks reales, podríamos rechazar o manejar de otra forma
+                        // Por ahora, continuamos con el importe pagado
+                    }
+
+                    Log::info("Procesando pago REAL de factura {$factura->id}", [
+                        'importe_factura_original' => $factura->importe_total,
+                        'importe_pagado' => $importePagado,
+                        'importe_esperado' => $importeEsperado,
+                        'fecha_pago' => $fechaPago
+                    ]);
+                }
+
+                // Calcular diferencia entre importe pagado y importe original de la factura
+                // Si se pagó más (por intereses), emitir nota de débito
+                $diferencia = round($importePagado - $factura->importe_total, 2);
+                if ($diferencia >= 1) {
+                    Log::info("Diferencia detectada, emitiendo nota de débito", [
+                        'factura_id' => $factura->id,
+                        'diferencia' => $diferencia
+                    ]);
+                    $this->emitirNotaDebitoAutomatica($factura, $diferencia, $fechaPago);
+                }
+
+                $factura->fecha_pago = $fechaPago;
+                $factura->importe_pago = $importePagado;
                 $factura->forma_pago = 4; // Asignar código para MercadoPago
+
+                Log::info("Guardando factura con importe_pago: {$importePagado}");
                 $factura->save();
 
                 Log::info("Factura {$factura->id} marcada como pagada vía MercadoPago");
+            } else {
+                Log::info("Factura ya tiene fecha_pago y no se fuerza procesamiento");
             }
 
         } catch (Exception $e) {
             Log::error('Error actualizando estado de factura: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+        }
+    }
+
+    /**
+     * Calcular el importe correspondiente según la fecha de pago y los vencimientos
+     *
+     * @param Factura $factura
+     * @param string $fechaPago Fecha en formato Y-m-d
+     * @return float Importe que corresponde pagar según la fecha
+     */
+    protected function calcularImporteCorrespondiente(Factura $factura, $fechaPago)
+    {
+        $fechaPagoCarbon = Carbon::parse($fechaPago);
+
+        // Obtener fechas de vencimiento
+        $primerVtoFecha = Carbon::parse($factura->primer_vto_fecha);
+        $segundoVtoFecha = Carbon::parse($factura->segundo_vto_fecha);
+
+        Log::info("Calculando importe correspondiente", [
+            'factura_id' => $factura->id,
+            'fecha_pago' => $fechaPagoCarbon->format('Y-m-d'),
+            'primer_vto' => $primerVtoFecha->format('Y-m-d'),
+            'segundo_vto' => $segundoVtoFecha->format('Y-m-d'),
+            'importe_total' => $factura->importe_total,
+            'segundo_vto_importe' => $factura->segundo_vto_importe
+        ]);
+
+        // Si paga en o antes del primer vencimiento → importe original
+        if ($fechaPagoCarbon->lte($primerVtoFecha)) {
+            Log::info("Pago en primer vencimiento - sin intereses");
+            return $factura->importe_total;
+        }
+
+        // Si paga en o antes del segundo vencimiento → importe con recargo del segundo vencimiento
+        if ($fechaPagoCarbon->lte($segundoVtoFecha)) {
+            Log::info("Pago en segundo vencimiento - con recargo fijo", [
+                'importe_con_recargo' => $factura->segundo_vto_importe
+            ]);
+            return $factura->segundo_vto_importe;
+        }
+
+        // Si paga después del segundo vencimiento → calcular interés diario
+        $interes = Interes::find(1);
+        if (!$interes || !$interes->tercer_vto_tasa) {
+            Log::warning("No se encontró configuración de interés diario, usando importe segundo vencimiento");
+            return $factura->segundo_vto_importe;
+        }
+
+        // Calcular días transcurridos desde el segundo vencimiento
+        $diasExcedentes = $segundoVtoFecha->diffInDays($fechaPagoCarbon) + 1;
+
+        // Calcular tasa acumulada (tasa diaria * días)
+        $tasaAcumulada = $diasExcedentes * $interes->tercer_vto_tasa;
+
+        // Calcular importe final con interés diario sobre el importe del segundo vencimiento
+        $importeConInteres = round(($factura->segundo_vto_importe * $tasaAcumulada / 100) + $factura->segundo_vto_importe, 2);
+
+        Log::info("Pago después del segundo vencimiento - con interés diario", [
+            'dias_excedentes' => $diasExcedentes,
+            'tasa_diaria' => $interes->tercer_vto_tasa,
+            'tasa_acumulada' => $tasaAcumulada,
+            'importe_base' => $factura->segundo_vto_importe,
+            'importe_con_interes' => $importeConInteres
+        ]);
+
+        return $importeConInteres;
+    }
+
+    /**
+     * Emitir nota de débito automática en AFIP cuando hay diferencia por intereses
+     *
+     * @param Factura $factura
+     * @param float $diferencia Diferencia a facturar (ya incluye IVA)
+     * @param string $fechaPago Fecha del pago
+     */
+    protected function emitirNotaDebitoAutomatica(Factura $factura, $diferencia, $fechaPago)
+    {
+        try {
+            Log::info("Iniciando emisión de nota de débito automática", [
+                'factura_id' => $factura->id,
+                'diferencia' => $diferencia,
+                'fecha_pago' => $fechaPago
+            ]);
+
+            // En entorno de testing, simular respuesta exitosa sin llamar a AFIP
+            if (app()->environment('testing')) {
+                Log::info('Modo testing: simulando emisión de nota de débito AFIP');
+
+                // Simular respuesta AFIP exitosa
+                $afipResponse = [
+                    'CbteDesde' => rand(100000, 999999),
+                    'CAE' => '12345678901234',
+                    'CAEFchVto' => date('Ymd', strtotime('+30 days'))
+                ];
+            } else {
+                // Determinar tipo de nota según talonario
+                $cbteTipo = $factura->talonario->letra == 'A' ? 2 : 7;
+
+                // Emitir en AFIP
+                $afipService = app(AfipService::class);
+
+                if ($factura->talonario->letra == 'A') {
+                    $afipResponse = $afipService->notaDebitoA(
+                        $factura->talonario->nro_punto_vta,
+                        $factura->cliente->dni,
+                        $diferencia,
+                        $factura->nro_factura
+                    );
+                } else {
+                    $afipResponse = $afipService->notaDebitoB(
+                        $factura->talonario->nro_punto_vta,
+                        $diferencia,
+                        $factura->nro_factura
+                    );
+                }
+            }
+
+            Log::info('Respuesta AFIP nota de débito automática', $afipResponse);
+
+            // Verificar si la respuesta indica éxito
+            if (isset($afipResponse['CbteDesde']) && !empty($afipResponse['CbteDesde'])) {
+                // Calcular importes (la diferencia ya incluye IVA)
+                $importeTotal = round($diferencia, 2);
+                $importeNeto = round($diferencia / 1.21, 2);
+                $importeIVA = round($importeTotal - $importeNeto, 2);
+
+                // Guardar registro en BD
+                $nota = new NotaDebito();
+                $nota->factura_id = $factura->id;
+                $nota->talonario_id = $factura->talonario_id;
+                $nota->nro_nota_debito = $afipResponse['CbteDesde'];
+                $nota->importe_ampliacion = $importeNeto;
+                $nota->importe_iva = $importeIVA;
+                $nota->importe_total = $importeTotal;
+                $nota->cae = isset($afipResponse['CAE']) ? $afipResponse['CAE'] : null;
+
+                try {
+                    $nota->cae_vto = isset($afipResponse['CAEFchVto'])
+                        ? Carbon::createFromFormat('Ymd', $afipResponse['CAEFchVto'])
+                        : null;
+                } catch (Exception $e) {
+                    Log::warning('Error parseando fecha CAE vencimiento: ' . $e->getMessage());
+                    $nota->cae_vto = null;
+                }
+
+                $nota->fecha_emision = Carbon::parse($fechaPago);
+                $nota->motivo = 'Ajuste automático por diferencia de pago (intereses de mora)';
+                $nota->nro_cliente = $factura->cliente->nro_cliente;
+                $nota->periodo = $factura->periodo;
+
+                Log::info('Datos de nota de débito a guardar', $nota->toArray());
+
+                if ($nota->save()) {
+                    Log::info("Nota de débito automática creada exitosamente", [
+                        'nota_id' => $nota->id,
+                        'factura_id' => $factura->id,
+                        'importe_total' => $importeTotal,
+                        'cae' => $nota->cae
+                    ]);
+                } else {
+                    Log::error('Error al guardar nota de débito: save() retornó false');
+                }
+            } else {
+                Log::error('Respuesta AFIP inválida para nota de débito', [
+                    'response' => $afipResponse
+                ]);
+            }
+
+        } catch (Exception $e) {
+            Log::error('Error emitiendo nota de débito automática: ' . $e->getMessage());
+            Log::error('Stack trace: ' . $e->getTraceAsString());
+            // No lanzar excepción para no interrumpir el flujo de pago
         }
     }
 

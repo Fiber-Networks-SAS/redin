@@ -43,6 +43,12 @@
                   <div class="col-md-12 col-lg-12 col-sm-12">
                     <?php echo $factura->mail_to ? '<h3><span class="label label-success pull-left">Recibido en: ' . $factura->mail_to . '</span></h3><br>' : ''; ?> 
                     <h3> <?php echo $factura->fecha_pago ? '<span class="label label-success pull-left">Pagada: ' . $factura->fecha_pago . '</span>' : '<span class="label label-danger pull-left">Pendiente</span>'; ?> </h3>
+                    @if(!$factura->fecha_pago)
+                      <br>
+                      <a href="/my-invoice/pay/{{$factura->id}}" class="btn btn-success btn-lg">
+                        <i class="fa fa-credit-card"></i> Pagar Factura
+                      </a>
+                    @endif
                   </div>
                 </div>
 
@@ -128,9 +134,91 @@
 
       <div class="clearfix"></div>
 
+      @if(isset($notasCredito) && $notasCredito->count() > 0)
       <div class="row">
         <div class="col-md-12 col-sm-12 col-xs-12">
-          
+          <div class="x_panel">
+            <div class="x_title">
+              <h2>Historial de Bonificaciones</h2>
+              <div class="clearfix"></div>
+            </div>
+            <div class="x_content">
+              <table class="table table-striped table-bordered">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Nota de Crédito</th>
+                    <th>Detalle</th>
+                    <th class="text-right">Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @foreach($notasCredito as $nota)
+                  <tr>
+                    <td>{{ \Carbon\Carbon::parse($nota->created_at)->format('d/m/Y H:i') }}</td>
+                    <td>{{ $nota->talonario->letra }} {{ $nota->talonario->nro_punto_vta }}-{{ str_pad($nota->nro_nota_credito, 8, '0', STR_PAD_LEFT) }}</td>
+                    <td>{{ $nota->motivo }}</td>
+                    <td class="text-right">${{ number_format($nota->importe_bonificacion, 2, ',', '.') }}</td>
+                  </tr>
+                  @endforeach
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th colspan="3" class="text-right"><strong>Total Bonificaciones:</strong></th>
+                    <th class="text-right"><strong>${{ number_format($notasCredito->sum('importe_bonificacion'), 2, ',', '.') }}</strong></th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      @endif
+
+      @if(isset($notasDebito) && $notasDebito->count() > 0)
+      <div class="row">
+        <div class="col-md-12 col-sm-12 col-xs-12">
+          <div class="x_panel">
+            <div class="x_title">
+              <h2>Historial de Ajustes por Intereses</h2>
+              <div class="clearfix"></div>
+            </div>
+            <div class="x_content">
+              <table class="table table-striped table-bordered">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Nota de Débito</th>
+                    <th>Detalle</th>
+                    <th class="text-right">Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @foreach($notasDebito as $nota)
+                  <tr>
+                    <td>{{ \Carbon\Carbon::parse($nota->fecha_emision)->format('d/m/Y') }}</td>
+                    <td>{{ $nota->talonario->letra }} {{ $nota->talonario->nro_punto_vta }}-{{ str_pad($nota->nro_nota_debito, 8, '0', STR_PAD_LEFT) }}</td>
+                    <td>{{ $nota->motivo }}</td>
+                    <td class="text-right">${{ number_format($nota->importe_ampliacion, 2, ',', '.') }}</td>
+                  </tr>
+                  @endforeach
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th colspan="3" class="text-right"><strong>Total Ajustes:</strong></th>
+                    <th class="text-right"><strong>${{ number_format($notasDebito->sum('importe_ampliacion'), 2, ',', '.') }}</strong></th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      @endif
+
+      <div class="row">
+        <div class="col-md-12 col-sm-12 col-xs-12">
+
 
 
 

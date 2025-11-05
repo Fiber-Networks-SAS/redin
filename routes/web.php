@@ -71,9 +71,8 @@ Route::group(['middleware' => ['role:client']], function() {
 	Route::get('/my-invoice/update/{id}', 'ClientController@getInvoiceUpdate');
 	Route::post('/my-invoice/update/{id}', 'BillController@getBillUpdatePost');
 
-        Route::get('/my-invoice/pay/{id}', 'ClientController@billPayMp');
-
-	// mis reclamos
+	Route::get('/my-invoice/pay/{id}', 'ClientController@pay');
+	Route::post('/my-invoice/process-payment/{id}', 'ClientController@processPayment');	// mis reclamos
 	Route::get('/my-claims', 'ClientController@myClaims');
 	Route::get('/my-claims/list', 'ClientController@getMyClaimsList'); 						// request for fill Table (via Ajax)
 	Route::get('/my-claims/detail/{id}', 'ClientController@getClaimsDetail');
@@ -231,6 +230,8 @@ Route::group(['prefix' => 'admin'], function() {
 
 		Route::get('/period/bill-improve/{id}', 'BillController@getBillImprove');
 		Route::post('/period/bill-improve/{id}', 'BillController@getBillImprovePost');
+		Route::get('/period/bill-ampliar/{id}', 'BillController@getBillAmpliar');
+		Route::post('/period/bill-ampliar/{id}', 'BillController@getBillAmpliarPost');
 		Route::get('/period/bill-update/{id}', 'BillController@getBillUpdate');
 		Route::post('/period/bill-update/{id}', 'BillController@getBillUpdatePost');
 		Route::get('/period/bill-pay/{id}', 'BillController@getBillPay');
@@ -294,6 +295,11 @@ Route::group(['prefix' => 'admin'], function() {
 		Route::get('/balance/detail/comprobante-xls', 'BillController@getBalanceDetalleXLS');
 
 
+		// regenerar PDF factura individual
+		Route::post('/bill/regenerate-pdf/{id}', 'BillController@regenerateBillPDF');
+		// regenerar PDF mÃºltiples facturas
+		Route::post('/bill/regenerate-pdf', 'BillController@regenerateBillPDF');
+
 		// temp --------------------------------------------------------------------------------------
 
 		// facturas pdf
@@ -319,7 +325,7 @@ Route::post('/webhooks/mercadopago', 'PaymentController@mercadoPagoWebhook')->na
 // API route for checking payment status
 Route::get('/api/payment/preference/{id}/status', 'PaymentController@checkPaymentStatus')->name('payment.status');
 
-// Diagnóstico AFIP - Certificados
+// Diagnï¿½stico AFIP - Certificados
 Route::get('afip-cert-debug', function () {
     $details = [];
     $success = false;
@@ -423,7 +429,7 @@ Route::get('afip-cert-debug', function () {
         }
         $details['certificate_tests'] = $certTestResults;
         
-        // Información del sistema
+        // Informaciï¿½n del sistema
         $details['system_info'] = [
             'php_version' => phpversion(),
             'os' => PHP_OS,
@@ -437,7 +443,7 @@ Route::get('afip-cert-debug', function () {
         
     } catch (\Exception $e) {
         $success = false;
-        $message = 'Error en diagnóstico: ' . $e->getMessage();
+        $message = 'Error en diagnï¿½stico: ' . $e->getMessage();
         $details['exception'] = [
             'message' => $e->getMessage(),
             'file' => $e->getFile(),
@@ -502,7 +508,7 @@ Route::get('afip-cert-debug', function () {
     $output .= "Existe: " . ($envInfo['exists'] ? 'SI' : 'NO') . "\n";
     if ($envInfo['exists']) {
         $output .= "Legible: " . ($envInfo['readable'] ? 'SI' : 'NO') . "\n";
-        $output .= "Tamaño: " . number_format($envInfo['size']) . " bytes\n";
+        $output .= "Tamaï¿½o: " . number_format($envInfo['size']) . " bytes\n";
         $output .= "Modificado: " . $envInfo['modified'] . "\n";
     }
     
@@ -510,7 +516,7 @@ Route::get('afip-cert-debug', function () {
         $output .= "\n=== ANALISIS DE CERTIFICADOS ===\n";
         foreach ($details['certificate_tests'] as $test) {
             $output .= "Archivo: {$test['file']} (en {$test['path']})\n";
-            $output .= "  Tamaño contenido: " . number_format($test['size']) . " bytes\n";
+            $output .= "  Tamaï¿½o contenido: " . number_format($test['size']) . " bytes\n";
             $output .= "  Formato valido: " . ($test['has_begin_cert'] && $test['has_end_cert'] ? 'SI' : 'NO') . "\n";
             $output .= "  Contiene clave privada: " . ($test['has_begin_private'] ? 'SI' : 'NO') . "\n";
             $output .= "  Saltos de linea: Unix({$test['line_endings']['unix_lf']}) Win({$test['line_endings']['windows_crlf']}) Mac({$test['line_endings']['mac_cr']})\n";
@@ -568,14 +574,14 @@ Route::get('afip-fix', function () {
             'key' => strlen($keyContent)
         ];
         
-        // Corregir saltos de línea en clave privada (convertir CRLF a LF)
+        // Corregir saltos de lï¿½nea en clave privada (convertir CRLF a LF)
         $originalKeyLines = [
             'unix_lf' => substr_count($keyContent, "\n"),
             'windows_crlf' => substr_count($keyContent, "\r\n"),
             'mac_cr' => substr_count($keyContent, "\r") - substr_count($keyContent, "\r\n")
         ];
         
-        // Normalizar saltos de línea
+        // Normalizar saltos de lï¿½nea
         $fixedKeyContent = str_replace(["\r\n", "\r"], "\n", $keyContent);
         
         $fixedKeyLines = [
@@ -595,7 +601,7 @@ Route::get('afip-fix', function () {
             $fixes_applied[] = 'Saltos de linea normalizados en afip.pem';
         }
         
-        // Crear/actualizar archivo .env con configuración AFIP
+        // Crear/actualizar archivo .env con configuraciï¿½n AFIP
         $envPath = base_path('.env');
         $envContent = file_exists($envPath) ? file_get_contents($envPath) : '';
         
@@ -634,7 +640,7 @@ Route::get('afip-fix', function () {
         
         $details['certificate_verification'] = $certVerification;
         
-        // Test de conexión AFIP (simulado)
+        // Test de conexiï¿½n AFIP (simulado)
         $testResult = [
             'files_accessible' => is_readable($certPath) && is_readable($keyPath),
             'env_vars_set' => !empty($envUpdates) || (env('AFIP_CERT') && env('AFIP_KEY')),
@@ -759,7 +765,7 @@ Route::get('afip-test', function () {
             $tests_results['server_status'] = [
                 'success' => true,
                 'data' => $serverStatus,
-                'message' => 'Conexión con servidor AFIP exitosa'
+                'message' => 'Conexiï¿½n con servidor AFIP exitosa'
             ];
         } catch (\Exception $e) {
             $tests_results['server_status'] = [
@@ -801,7 +807,7 @@ Route::get('afip-test', function () {
                     
                     $salesPointsData[] = $pointData;
                     
-                    // Usar el primer punto de venta válido encontrado
+                    // Usar el primer punto de venta vï¿½lido encontrado
                     if ($index === 0 && isset($pointData['PtoVta'])) {
                         $validSalesPoint = 4;
                     }
@@ -869,13 +875,13 @@ Route::get('afip-test', function () {
                 'success' => true,
                 'count' => count($aliquotTypes),
                 'data' => $aliquotTypes, // Todos los tipos de IVA
-                'message' => 'Tipos de alícuotas IVA obtenidos'
+                'message' => 'Tipos de alï¿½cuotas IVA obtenidos'
             ];
         } catch (\Exception $e) {
             $tests_results['aliquot_types'] = [
                 'success' => false,
                 'error' => mb_convert_encoding($e->getMessage(), 'UTF-8', 'UTF-8'),
-                'message' => 'Error al obtener tipos de alícuotas'
+                'message' => 'Error al obtener tipos de alï¿½cuotas'
             ];
         }
         
@@ -896,39 +902,39 @@ Route::get('afip-test', function () {
             ];
         }
         
-        // Test 6: Obtener último número de factura B (usando punto de venta válido)
+        // Test 6: Obtener ï¿½ltimo nï¿½mero de factura B (usando punto de venta vï¿½lido)
         try {
             $lastVoucherB = $afipService->getLastVoucher(4, 6);
             $tests_results['last_voucher_b'] = [
                 'success' => true,
                 'data' => $lastVoucherB,
-                'message' => "Último número de Factura B obtenido (PtoVta {$validSalesPoint})"
+                'message' => "ï¿½ltimo nï¿½mero de Factura B obtenido (PtoVta {$validSalesPoint})"
             ];
         } catch (\Exception $e) {
             $tests_results['last_voucher_b'] = [
                 'success' => false,
                 'error' => $e->getMessage(),
-                'message' => 'Error al obtener último voucher B'
+                'message' => 'Error al obtener ï¿½ltimo voucher B'
             ];
         }
         
-        // Test 7: Obtener último número de factura A (usando punto de venta válido)
+        // Test 7: Obtener ï¿½ltimo nï¿½mero de factura A (usando punto de venta vï¿½lido)
         try {
             $lastVoucherA = $afipService->getLastVoucher(4, 1);
             $tests_results['last_voucher_a'] = [
                 'success' => true,
                 'data' => $lastVoucherA,
-                'message' => "Último número de Factura A obtenido (PtoVta {$validSalesPoint})"
+                'message' => "ï¿½ltimo nï¿½mero de Factura A obtenido (PtoVta {$validSalesPoint})"
             ];
         } catch (\Exception $e) {
             $tests_results['last_voucher_a'] = [
                 'success' => false,
                 'error' => $e->getMessage(),
-                'message' => 'Error al obtener último voucher A'
+                'message' => 'Error al obtener ï¿½ltimo voucher A'
             ];
         }
         
-        // Test 8: Información de certificado y configuración
+        // Test 8: Informaciï¿½n de certificado y configuraciï¿½n
         $certPath = storage_path('app/afip.crt');
         $keyPath = storage_path('app/afip.pem');
         $tests_results['certificate_info'] = [
@@ -941,14 +947,14 @@ Route::get('afip-test', function () {
                 'cuit' => env('AFIP_CUIT', 'NOT_SET'),
                 'production' => env('AFIP_PRODUCTION', false) ? 'SI' : 'NO',
             ],
-            'message' => 'Información de certificados y configuración'
+            'message' => 'Informaciï¿½n de certificados y configuraciï¿½n'
         ];
         
-        // Test 9: Crear factura de prueba muy pequeña (solo si NO estamos en producción)
+        // Test 9: Crear factura de prueba muy pequeï¿½a (solo si NO estamos en producciï¿½n)
         $isProduction = env('AFIP_PRODUCTION', false);
         if (!$isProduction) {
             try {
-                // Factura B de $1 para consumidor final usando punto de venta válido
+                // Factura B de $1 para consumidor final usando punto de venta vï¿½lido
                 $testInvoice = $afipService->facturaB($validSalesPoint, 1.00);
                 $tests_results['test_invoice_creation'] = [
                     'success' => true,
@@ -966,30 +972,30 @@ Route::get('afip-test', function () {
             $tests_results['test_invoice_creation'] = [
                 'success' => false,
                 'skipped' => true,
-                'message' => 'Test omitido - Configuración en PRODUCCIÓN'
+                'message' => 'Test omitido - Configuraciï¿½n en PRODUCCIï¿½N'
             ];
         }
         
-        // Test 10: Obtener información de voucher específico (si existe)
+        // Test 10: Obtener informaciï¿½n de voucher especï¿½fico (si existe)
         if (isset($lastVoucherB) && $lastVoucherB > 0 && !empty($validSalesPoints)) {
             try {
                 $voucherInfo = $afipService->getVoucherInfo($lastVoucherB, $validSalesPoints[0], 6);
                 $tests_results['voucher_info'] = [
                     'success' => true,
-                    'message' => "Información del voucher #{$lastVoucherB} obtenida correctamente para punto de venta {$validSalesPoints[0]}"
+                    'message' => "Informaciï¿½n del voucher #{$lastVoucherB} obtenida correctamente para punto de venta {$validSalesPoints[0]}"
                 ];
             } catch (\Exception $e) {
                 $tests_results['voucher_info'] = [
                     'success' => false,
                     'error' => mb_convert_encoding($e->getMessage(), 'UTF-8', 'UTF-8'),
-                    'message' => 'Error al obtener información de voucher'
+                    'message' => 'Error al obtener informaciï¿½n de voucher'
                 ];
             }
         } else {
             $tests_results['voucher_info'] = [
                 'success' => false,
                 'skipped' => true,
-                'message' => 'Test omitido - No hay vouchers previos o puntos de venta válidos para consultar'
+                'message' => 'Test omitido - No hay vouchers previos o puntos de venta vï¿½lidos para consultar'
             ];
         }
         
@@ -1052,7 +1058,7 @@ Route::get('afip-test', function () {
         
     } catch (\Exception $e) {
         $success = false;
-        $message = 'Error crítico al inicializar AFIP: ' . $e->getMessage();
+        $message = 'Error crï¿½tico al inicializar AFIP: ' . $e->getMessage();
         $details['initialization'] = [
             'status' => 'error',
             'message' => $e->getMessage(),
@@ -1066,7 +1072,7 @@ Route::get('afip-test', function () {
     $format = request()->get('format', 'html');
     if ($format === 'json' || request()->ajax() || request()->wantsJson()) {
         
-        // Crear versión simplificada para JSON (sin datos complejos de AFIP)
+        // Crear versiï¿½n simplificada para JSON (sin datos complejos de AFIP)
         $simpleResults = [];
         foreach ($tests_results as $testName => $result) {
             $simpleResults[$testName] = [
@@ -1103,7 +1109,7 @@ Route::get('afip-test', function () {
         $output .= "Exitosas: " . $summary['successful'] . "\n";
         $output .= "Fallidas: " . $summary['failed'] . "\n";
         $output .= "Omitidas: " . $summary['skipped'] . "\n";
-        $output .= "Tasa de éxito: " . $summary['success_rate'] . "%\n\n";
+        $output .= "Tasa de ï¿½xito: " . $summary['success_rate'] . "%\n\n";
     }
     
     $output .= "=== RESULTADOS DETALLADOS ===\n";
@@ -1138,15 +1144,15 @@ Route::get('afip-test', function () {
     $statusColor = $success ? 'green' : 'red';
     
     return response(
-        '<html><head><meta charset="UTF-8"><title>AFIP SDK - Pruebas de Integración</title></head><body>' .
-        '<h1>AFIP SDK - Pruebas de Integración</h1>' .
+        '<html><head><meta charset="UTF-8"><title>AFIP SDK - Pruebas de Integraciï¿½n</title></head><body>' .
+        '<h1>AFIP SDK - Pruebas de Integraciï¿½n</h1>' .
         '<div style="margin:10px 0;"><strong>Estado:</strong> <span style="color:' . $statusColor . '">' . ($success ? 'EXITO' : 'ERROR') . '</span></div>' .
         '<pre style="background:#f0f0f0; padding:15px; border:1px solid #ccc; font-family:monospace; white-space:pre-wrap;">' . 
         htmlspecialchars($output) . 
         '</pre>' .
         '<div style="margin:15px 0;">' .
         '<a href="?format=json" style="background:#007cba;color:white;padding:8px 16px;text-decoration:none;margin-right:10px;">Ver JSON</a>' .
-        '<a href="/afip-cert-debug" style="background:#28a745;color:white;padding:8px 16px;text-decoration:none;margin-right:10px;">Diagnóstico Cert.</a>' .
+        '<a href="/afip-cert-debug" style="background:#28a745;color:white;padding:8px 16px;text-decoration:none;margin-right:10px;">Diagnï¿½stico Cert.</a>' .
         '<a href="/afip-fix" style="background:#ffc107;color:black;padding:8px 16px;text-decoration:none;margin-right:10px;">Corregir Cert.</a>' .
         '<a href="/storage-link" style="background:#6c757d;color:white;padding:8px 16px;text-decoration:none;margin-right:10px;">Storage Link</a>' .
         '<a href="javascript:history.back()" style="background:#666;color:white;padding:8px 16px;text-decoration:none;">? Volver</a>' .

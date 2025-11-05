@@ -173,6 +173,47 @@
       </div>
       @endif
 
+      @if(isset($notasDebito) && $notasDebito->count() > 0)
+      <div class="row">
+        <div class="col-md-12 col-sm-12 col-xs-12">
+          <div class="x_panel">
+            <div class="x_title">
+              <h2>Historial de Ajustes por Intereses</h2>
+              <div class="clearfix"></div>
+            </div>
+            <div class="x_content">
+              <table class="table table-striped table-bordered">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Nota de Débito</th>
+                    <th>Detalle</th>
+                    <th class="text-right">Importe</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @foreach($notasDebito as $nota)
+                  <tr>
+                    <td>{{ \Carbon\Carbon::parse($nota->fecha_emision)->format('d/m/Y') }}</td>
+                    <td>{{ $nota->talonario->letra }} {{ $nota->talonario->nro_punto_vta }}-{{ str_pad($nota->nro_nota_debito, 8, '0', STR_PAD_LEFT) }}</td>
+                    <td>{{ $nota->motivo }}</td>
+                    <td class="text-right">${{ number_format($nota->importe_ampliacion, 2, ',', '.') }}</td>
+                  </tr>
+                  @endforeach
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th colspan="3" class="text-right"><strong>Total Ajustes:</strong></th>
+                    <th class="text-right"><strong>${{ number_format($notasDebito->sum('importe_ampliacion'), 2, ',', '.') }}</strong></th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      @endif
+
       <div class="row">
         <div class="col-md-12 col-sm-12 col-xs-12">
           

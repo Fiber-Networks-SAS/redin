@@ -15,6 +15,17 @@ return array(
     |
     */
 
-    'driver' => 'gd'
+    'driver' => 'gd',
+    
+    /*
+    |--------------------------------------------------------------------------
+    | Suppress GD warnings
+    |--------------------------------------------------------------------------
+    |
+    | Suppress libpng warnings for corrupted sRGB profiles
+    |
+    */
+    
+    'suppress_warnings' => true
 
 );
