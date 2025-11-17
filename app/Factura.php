@@ -82,6 +82,11 @@ class Factura extends Model implements AuditableContract
         return $this->hasMany('App\BonificacionPuntual', 'factura_id');
     }
 
+    public function pagosInformados()
+    {
+        return $this->hasMany('App\PagoInformado', 'factura_id');
+    }
+
     /**
      * Formatear fecha de primer vencimiento para mostrar en vistas
      */

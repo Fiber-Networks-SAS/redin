@@ -39,6 +39,7 @@ use App\Cuota;
 use App\PagosConfig;
 use App\ImportCe;
 use App\PaymentPreference;
+use App\PagoInformado;
 use App\NotaCredito;
 use App\Services\AfipService;
 use App\Services\PaymentQRService;
@@ -103,7 +104,7 @@ class BillController extends Controller
 
         $this->tipo = ['Internet', 'Telefon�a', 'Televisi�n'];
         $this->drop = ['En Pilar', 'En Domicilio', 'Sin Drop'];
-        $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express', 4 => 'Mercado Pago']; // 4 => 'Tarjeta de Cr�dito', 5 => 'Dep�sito'
+        $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express', 4 => 'Mercado Pago', 6 => 'CBU/Transferencia']; // 4 => 'Tarjeta de Cr�dito', 5 => 'Dep�sito'
         $this->meses = [
             '01' => 'ENERO',
             '02' => 'FEBRERO',
@@ -3398,6 +3399,141 @@ class BillController extends Controller
                 'message' => 'Error al regenerar PDF.',
                 'error' => $e->getMessage()
             ];
+        }
+    }
+
+    /**
+     * Listar pagos informados pendientes de validación
+     */
+    public function getInformedPayments(Request $request)
+    {
+        $pagosInformados = PagoInformado::with(['factura.talonario', 'factura.cliente', 'usuario'])
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        foreach ($pagosInformados as $pago) {
+            $pago->factura->talonario->nro_punto_vta = $this->zerofill($pago->factura->talonario->nro_punto_vta, 4);
+            $pago->factura->nro_factura = $this->zerofill($pago->factura->nro_factura);
+        }
+
+        return View::make('admin.informed_payments')->with(['pagos_informados' => $pagosInformados]);
+    }
+
+    /**
+     * Ver detalle de un pago informado
+     */
+    public function getInformedPaymentDetail(Request $request, $id)
+    {
+        $pagoInformado = PagoInformado::with(['factura.talonario', 'factura.cliente', 'usuario', 'validadoPor'])
+            ->find($id);
+
+        if (!$pagoInformado) {
+            return redirect()->back()->with(['status' => 'danger', 'message' => 'Pago informado no encontrado.', 'icon' => 'fa-frown-o']);
+        }
+
+        $pagoInformado->factura->talonario->nro_punto_vta = $this->zerofill($pagoInformado->factura->talonario->nro_punto_vta, 4);
+        $pagoInformado->factura->nro_factura = $this->zerofill($pagoInformado->factura->nro_factura);
+
+        return View::make('admin.informed_payment_detail')->with(['pago_informado' => $pagoInformado]);
+    }
+
+    /**
+     * Aprobar un pago informado
+     */
+    public function approveInformedPayment(Request $request, $id)
+    {
+        $pagoInformado = PagoInformado::find($id);
+
+        if (!$pagoInformado) {
+            return response()->json(['error' => 'Pago informado no encontrado'], 404);
+        }
+
+        if ($pagoInformado->estado !== 'pendiente') {
+            return response()->json(['error' => 'El pago ya fue procesado'], 400);
+        }
+
+        $factura = $pagoInformado->factura;
+
+        // Verificar que la factura no esté ya pagada
+        if ($factura->fecha_pago) {
+            return response()->json(['error' => 'La factura ya está pagada'], 400);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Aprobar el pago informado
+            $pagoInformado->aprobar(Auth::id(), $request->observaciones);
+
+            // Marcar la factura como pagada
+            $factura->fecha_pago = $pagoInformado->fecha_pago_informado;
+            $factura->importe_pago = $pagoInformado->importe_informado;
+            $factura->forma_pago = 6; // CBU/Transferencia
+            $factura->save();
+
+            DB::commit();
+
+            // Enviar correo de aprobación al cliente
+            try {
+                Mail::send('email.pago_informado_aprobado', ['pagoInformado' => $pagoInformado], function ($message) use ($pagoInformado) {
+                    $message->to($pagoInformado->usuario->email, $pagoInformado->usuario->firstname . ' ' . $pagoInformado->usuario->lastname);
+                    $message->subject('REDIN - ¡Pago Aprobado! - Factura Pagada');
+                });
+            } catch (\Exception $e) {
+                Log::error('Error enviando correo de pago aprobado: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'success' => 'Pago aprobado correctamente. La factura ha sido marcada como pagada y se ha notificado al cliente por email.',
+                'factura_numero' => $factura->talonario->letra . ' ' . $factura->talonario->nro_punto_vta . '-' . $factura->nro_factura
+            ]);
+
+        } catch (Exception $e) {
+            DB::rollback();
+            return response()->json(['error' => 'Error al aprobar el pago: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Rechazar un pago informado
+     */
+    public function rejectInformedPayment(Request $request, $id)
+    {
+        $pagoInformado = PagoInformado::find($id);
+
+        if (!$pagoInformado) {
+            return response()->json(['error' => 'Pago informado no encontrado'], 404);
+        }
+
+        if ($pagoInformado->estado !== 'pendiente') {
+            return response()->json(['error' => 'El pago ya fue procesado'], 400);
+        }
+
+        $observaciones = $request->observaciones;
+        if (empty($observaciones)) {
+            return response()->json(['error' => 'Las observaciones son obligatorias para rechazar un pago'], 400);
+        }
+
+        try {
+            $pagoInformado->rechazar(Auth::id(), $observaciones);
+
+            // Enviar correo de rechazo al cliente
+            try {
+                Mail::send('email.pago_informado_rechazado', ['pagoInformado' => $pagoInformado], function ($message) use ($pagoInformado) {
+                    $message->to($pagoInformado->usuario->email, $pagoInformado->usuario->firstname . ' ' . $pagoInformado->usuario->lastname);
+                    $message->subject('REDIN - Pago Rechazado - Información Importante');
+                });
+            } catch (\Exception $e) {
+                Log::error('Error enviando correo de pago rechazado: ' . $e->getMessage());
+            }
+
+            return response()->json([
+                'success' => 'Pago rechazado correctamente. Se ha notificado al cliente por email con el motivo del rechazo.',
+                'observaciones' => $observaciones
+            ]);
+
+        } catch (Exception $e) {
+            return response()->json(['error' => 'Error al rechazar el pago: ' . $e->getMessage()], 500);
         }
     }
 }

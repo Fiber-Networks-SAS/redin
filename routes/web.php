@@ -72,7 +72,11 @@ Route::group(['middleware' => ['role:client']], function() {
 	Route::post('/my-invoice/update/{id}', 'BillController@getBillUpdatePost');
 
 	Route::get('/my-invoice/pay/{id}', 'ClientController@pay');
-	Route::post('/my-invoice/process-payment/{id}', 'ClientController@processPayment');	// mis reclamos
+	Route::post('/my-invoice/process-payment/{id}', 'ClientController@processPayment');
+	
+	// Informar pago por CBU/Transferencia
+	Route::get('/my-invoice/inform-payment/{id}', 'ClientController@informPayment');
+	Route::post('/my-invoice/inform-payment/{id}', 'ClientController@storeInformedPayment');
 	Route::get('/my-claims', 'ClientController@myClaims');
 	Route::get('/my-claims/list', 'ClientController@getMyClaimsList'); 						// request for fill Table (via Ajax)
 	Route::get('/my-claims/detail/{id}', 'ClientController@getClaimsDetail');
@@ -216,6 +220,21 @@ Route::group(['prefix' => 'admin'], function() {
 		Route::post('/bonificaciones/delete/{id}', 'BonificacionServicioController@destroy');
 		Route::post('/bonificaciones/toggle/{id}', 'BonificacionServicioController@toggleActive');
 
+		// home contents (CMS)
+		Route::get('/home-contents', 'HomeContentController@index');
+		Route::get('/home-contents/list', 'HomeContentController@getList');
+		Route::get('/home-contents/create', 'HomeContentController@create');
+		Route::post('/home-contents/create', 'HomeContentController@store');
+		Route::get('/home-contents/view/{id}', 'HomeContentController@show');
+		Route::get('/home-contents/edit/{id}', 'HomeContentController@edit');
+		Route::post('/home-contents/edit/{id}', 'HomeContentController@update');
+		Route::post('/home-contents/delete/{id}', 'HomeContentController@destroy');
+		Route::post('/home-contents/toggle/{id}', 'HomeContentController@toggleActive');
+
+        // home settings (CMS global)
+        Route::get('/home-settings', 'Admin\HomeSettingsController@edit');
+        Route::post('/home-settings', 'Admin\HomeSettingsController@update');
+
 		// periodos
 		Route::get('/period', 'BillController@index');
 		Route::get('/period/list', 'BillController@getList'); 								// request for fill Table (via Ajax)
@@ -241,7 +260,13 @@ Route::group(['prefix' => 'admin'], function() {
 
 		// cancelar pago factura
 		Route::get('/period/bill-pay-cancel/{id}', 'BillController@getBillPayCancel');
-		Route::post('/period/bill-pay-cancel/{id}', 'BillController@getBillPayCancelPost');		
+		Route::post('/period/bill-pay-cancel/{id}', 'BillController@getBillPayCancelPost');
+		
+		// gestión de pagos informados
+		Route::get('/payments/informed', 'BillController@getInformedPayments');
+		Route::get('/payments/informed/{id}', 'BillController@getInformedPaymentDetail');
+		Route::post('/payments/informed/{id}/approve', 'BillController@approveInformedPayment');
+		Route::post('/payments/informed/{id}/reject', 'BillController@rejectInformedPayment');		
 
 		// search bills
 		Route::get('/bills/', 'BillController@billSearch');

@@ -6,6 +6,7 @@
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     
     <link rel="shortcut icon" href="/favicon.png">
 
@@ -89,6 +90,7 @@
                                       <li><a href="/admin/period"></i>Períodos</a></li>
                                       <li><a href="/admin/bills"></i>Buscar</a></li>
                                       <li><a href="/admin/bills/single"></i>Factura Simple</a></li>
+                                      <li><a href="/admin/payments/informed"><i class="fa fa-bank"></i>Pagos Informados</a></li>
                                     </ul>
                                 </li>
                                 
@@ -108,6 +110,7 @@
                                     <li><a href="/admin/config/dues">Cuotas</a></li>
                                     <li><a href="/admin/config/payments">Plan de Pagos</a></li>
                                     <li><a href="/admin/bonificaciones">Bonificaciones</a></li>
+                                    <li><a href="/admin/home-settings">Editar Home</a></li>
                                   </ul>
                                 </li>
                                 
