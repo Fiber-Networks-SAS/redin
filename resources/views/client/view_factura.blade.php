@@ -43,11 +43,35 @@
                   <div class="col-md-12 col-lg-12 col-sm-12">
                     <?php echo $factura->mail_to ? '<h3><span class="label label-success pull-left">Recibido en: ' . $factura->mail_to . '</span></h3><br>' : ''; ?> 
                     <h3> <?php echo $factura->fecha_pago ? '<span class="label label-success pull-left">Pagada: ' . $factura->fecha_pago . '</span>' : '<span class="label label-danger pull-left">Pendiente</span>'; ?> </h3>
-                    @if(!$factura->fecha_pago)
+                    
+                    @php
+                        $pagoInformadoPendiente = $factura->pagosInformados()->where('estado', 'pendiente')->first();
+                    @endphp
+                    
+                    @if($pagoInformadoPendiente)
+                      <div class="alert alert-warning" role="alert">
+                        <i class="fa fa-clock-o"></i> <strong>Pago Pendiente de Validación:</strong><br>
+                        Usted informó un pago por <strong>${{number_format($pagoInformadoPendiente->importe_informado, 2, ',', '.')}}</strong> 
+                        realizado el {{$pagoInformadoPendiente->fecha_pago_informado_formatted}}.<br>
+                        <small><em>Su factura permanecerá pendiente hasta que nuestro equipo valide la información. Recibirá una notificación del resultado.</em></small>
+                      </div>
+                    @endif
+                    @if(!$factura->fecha_pago && !$pagoInformadoPendiente)
                       <br>
-                      <a href="/my-invoice/pay/{{$factura->id}}" class="btn btn-success btn-lg">
-                        <i class="fa fa-credit-card"></i> Pagar Factura
-                      </a>
+                      <div class="btn-group" role="group">
+                        <a href="/my-invoice/pay/{{$factura->id}}" class="btn btn-success btn-lg">
+                          <i class="fa fa-credit-card"></i> Pagar con MercadoPago
+                        </a>
+                        <a href="/my-invoice/inform-payment/{{$factura->id}}" class="btn btn-info btn-lg">
+                          <i class="fa fa-bank"></i> Informar Pago por CBU/Transferencia
+                        </a>
+                      </div>
+                    @elseif(!$factura->fecha_pago && $pagoInformadoPendiente)
+                      <br>
+                      <div class="alert alert-info text-center">
+                        <i class="fa fa-info-circle"></i> 
+                        <strong>No puede realizar otro pago mientras hay uno pendiente de validación.</strong>
+                      </div>
                     @endif
                   </div>
                 </div>

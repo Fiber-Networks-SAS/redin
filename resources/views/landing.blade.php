@@ -38,13 +38,10 @@
   <header id="home">
     <div id="home-slider" class="carousel slide carousel-fade" data-ride="carousel">
       <div class="carousel-inner">
-        <div class="item active" style="background-image: url(/_landing/images/slider/1.jpg)">
+        <div class="item active" style="background-image: url({{ isset($homeSettings['slider_bg']) ? $homeSettings['slider_bg']->value : '/_landing/images/slider/1.jpg' }})">
           <div class="caption">
-            <!-- <h1 class="animated fadeInLeftBig"><img src="images/logo2.png" alt=""> <span>Quality Tel Networks</span></h1> -->
-            <h1 class="">ReDin</h1>
-            <!-- <h1 class="animated fadeInLeftBig"> Quality Tel Networks</h1> -->
-            <!-- <p class="animated fadeInRightBig">Quality Tel Networks</p> -->
-            <p class="animated fadeInRightBig">Lider en Telecomunicaciones</p>
+            <h1 class="">{{ isset($homeSettings['slider_title']) ? $homeSettings['slider_title']->value : (isset($contentSections['slider']) ? $contentSections['slider']->title : 'ReDin') }}</h1>
+            <p class="animated fadeInRightBig">{{ isset($homeSettings['slider_subtitle']) ? $homeSettings['slider_subtitle']->value : (isset($contentSections['slider']) ? $contentSections['slider']->subtitle : 'Lider en Telecomunicaciones') }}</p>
             <a data-scroll class="btn btn-start animated fadeInUpBig" href="#services">Nuestros servicios</a>
           </div>
         </div>
@@ -100,9 +97,9 @@
       <div class="heading wow fadeInUp" data-wow-duration="1000ms" data-wow-delay="300ms">
         <div class="row">
           <div class="text-center col-sm-8 col-sm-offset-2">
-            <h2>Nuestros Servicios</h2>
-            <p>Ofrecemos soluciones integrales en telecomunicaciones para satisfacer todas tus necesidades de conectividad.</p>
-            <p>Descubre nuestra amplia gama de servicios diseñados para brindarte la mejor experiencia en comunicaciones.</p>
+            <h2>{{ isset($homeSettings['services_title']) ? $homeSettings['services_title']->value : (isset($contentSections['services']) ? $contentSections['services']->title : 'Nuestros Servicios') }}</h2>
+            <p>{{ isset($homeSettings['services_subtitle']) ? $homeSettings['services_subtitle']->value : (isset($contentSections['services']) ? $contentSections['services']->subtitle : 'Ofrecemos soluciones integrales en telecomunicaciones para satisfacer todas tus necesidades de conectividad.') }}</p>
+            <p>{{ isset($homeSettings['services_text']) ? $homeSettings['services_text']->value : (isset($contentSections['services']) ? $contentSections['services']->content : 'Descubre nuestra amplia gama de servicios diseñados para brindarte la mejor experiencia en comunicaciones.') }}</p>
           </div>
         </div> 
       </div>
@@ -178,11 +175,9 @@
       <div class="row company">
         <div class="col-sm-12">
           <div class="about-info wow fadeInUp" data-wow-duration="1000ms" data-wow-delay="300ms">
-            <h2>La Empresa</h2>
-            <p class="title">Conectamos tu mundo con la mejor experiencia de Internet</p>
-            <p>En nuestra empresa, transformamos la manera en que las personas se conectan ofreciendo Internet simétrico por fibra óptica, la tecnología más avanzada en conectividad. Gracias a ello, disfrutás de velocidades iguales de subida y bajada, lo que te permite navegar, trabajar, estudiar, jugar en línea o transmitir contenido sin límites ni interrupciones.</p>
-            <p>La fibra óptica garantiza estabilidad, rapidez y confiabilidad en todo momento, incluso en los momentos de mayor demanda. Además, entendemos que cada cliente es único, por eso ofrecemos soluciones personalizadas, adaptándonos a tus necesidades específicas sin importar el plan que elijas.</p>
-            <p>Nuestro compromiso es brindarte un servicio de alta calidad, con un equipo siempre disponible para acompañarte y una atención cercana que te hace sentir respaldado en cada conexión. Apostamos a la innovación tecnológica para estar siempre un paso adelante, asegurando que tu experiencia digital sea la mejor.</p>
+            <h2>{{ isset($homeSettings['company_title']) ? $homeSettings['company_title']->value : (isset($contentSections['company']) ? $contentSections['company']->title : 'La Empresa') }}</h2>
+            <p class="title">{{ isset($homeSettings['company_subtitle']) ? $homeSettings['company_subtitle']->value : (isset($contentSections['company']) ? $contentSections['company']->subtitle : 'Conectamos tu mundo con la mejor experiencia de Internet') }}</p>
+            {!! isset($homeSettings['company_text']) ? nl2br(e($homeSettings['company_text']->value)) : (isset($contentSections['company']) ? nl2br(e($contentSections['company']->content)) : '<p>En nuestra empresa, transformamos la manera en que las personas se conectan ofreciendo Internet simétrico por fibra óptica, la tecnología más avanzada en conectividad. Gracias a ello, disfrutás de velocidades iguales de subida y bajada, lo que te permite navegar, trabajar, estudiar, jugar en línea o transmitir contenido sin límites ni interrupciones.</p><p>La fibra óptica garantiza estabilidad, rapidez y confiabilidad en todo momento, incluso en los momentos de mayor demanda. Además, entendemos que cada cliente es único, por eso ofrecemos soluciones personalizadas, adaptándonos a tus necesidades específicas sin importar el plan que elijas.</p><p>Nuestro compromiso es brindarte un servicio de alta calidad, con un equipo siempre disponible para acompañarte y una atención cercana que te hace sentir respaldado en cada conexión. Apostamos a la innovación tecnológica para estar siempre un paso adelante, asegurando que tu experiencia digital sea la mejor.</p>') !!}
           </div>
         </div>
       </div>
@@ -216,11 +211,9 @@
     <div class="container">
       <div class="row">
         <div class="heading text-center col-sm-8 col-sm-offset-2 wow fadeInUp" data-wow-duration="1200ms" data-wow-delay="300ms">
-          <h2>Internet</h2>
-          <p style="text-align: center; font-size: large; font-style: italic;"><strong>Internet simétrico por fibra óptica, pensado para vos</strong></p>
-          <p>Disfrutá de una conexión rápida, estable y confiable, con la misma velocidad de subida y bajada para que trabajes, estudies o juegues sin límites.</p>
-          <p>Nos adaptamos a tus necesidades con soluciones personalizadas, sin importar el plan contratado.</p>
-          <p>Con compromiso, innovación y atención cercana, te ofrecemos una experiencia de Internet superior.</p>
+          <h2>{{ isset($homeSettings['internet_title']) ? $homeSettings['internet_title']->value : (isset($contentSections['internet']) ? $contentSections['internet']->title : 'Internet') }}</h2>
+          <p style="text-align: center; font-size: large; font-style: italic;"><strong>{{ isset($homeSettings['internet_subtitle']) ? $homeSettings['internet_subtitle']->value : (isset($contentSections['internet']) ? $contentSections['internet']->subtitle : 'Internet simétrico por fibra óptica, pensado para vos') }}</strong></p>
+          {!! isset($homeSettings['internet_text']) ? nl2br(e($homeSettings['internet_text']->value)) : (isset($contentSections['internet']) ? nl2br(e($contentSections['internet']->content)) : '<p>Disfrutá de una conexión rápida, estable y confiable, con la misma velocidad de subida y bajada para que trabajes, estudies o juegues sin límites.</p><p>Nos adaptamos a tus necesidades con soluciones personalizadas, sin importar el plan contratado.</p><p>Con compromiso, innovación y atención cercana, te ofrecemos una experiencia de Internet superior.</p>') !!}
         </div>
       </div>
       <div class="pricing-table">
@@ -342,8 +335,8 @@
       <div class="container" id="contact">
         <div class="row">
           <div class="heading text-center col-sm-8 col-sm-offset-2 wow fadeInUp" data-wow-duration="1000ms" data-wow-delay="300ms">
-            <h2>Contacto</h2>
-            <p>¿Tienes alguna pregunta o necesitas más información sobre nuestros servicios? Completa el formulario a continuación y nos pondremos en contacto contigo lo antes posible.</p>
+            <h2>{{ isset($homeSettings['contact_title']) ? $homeSettings['contact_title']->value : (isset($contentSections['contact']) ? $contentSections['contact']->title : 'Contacto') }}</h2>
+            <p>{{ isset($homeSettings['contact_text']) ? $homeSettings['contact_text']->value : (isset($contentSections['contact']) ? $contentSections['contact']->content : '¿Tienes alguna pregunta o necesitas más información sobre nuestros servicios? Completa el formulario a continuación y nos pondremos en contacto contigo lo antes posible.') }}</p>
           </div>
         </div>
         <div class="contact-form wow fadeIn" data-wow-duration="1000ms" data-wow-delay="600ms">

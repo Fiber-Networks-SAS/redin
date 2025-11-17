@@ -34,11 +34,13 @@ use App\Reclamo;
 use App\Cuota;
 use App\PagosConfig;
 use App\PaymentPreference;
+use App\PagoInformado;
 
 // use Entrust;
 use PDF;
 use Carbon\Carbon;
-    use App\Services\MercadoPagoService;
+use Illuminate\Support\Facades\Log;
+use App\Services\MercadoPagoService;
 
 
 
@@ -94,7 +96,7 @@ class ClientController extends Controller
 
         $this->tipo = ['Internet', 'Telefonía', 'Televisión'];
         $this->drop = ['En Pilar', 'En Domicilio', 'Sin Drop'];
-        $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express', 4 => 'Mercado Pago']; // 4 => 'Tarjeta de Crédito', 5 => 'Depósito'
+        $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express', 4 => 'Mercado Pago', 6 => 'CBU/Transferencia']; // 4 => 'Tarjeta de Crédito', 5 => 'Depósito'
 
     }
 
@@ -597,7 +599,11 @@ class ClientController extends Controller
 
             $factura->fecha_pago = $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null;
             $factura->importe_pago = $factura->importe_pago; 
-            $factura->forma_pago = $factura->fecha_pago ? $this->forma_pago[$factura->forma_pago] : '';
+            $current_forma_pago = $factura->forma_pago;
+            $factura->forma_pago = '';
+            if ($factura->fecha_pago && isset($this->forma_pago[$current_forma_pago])) {
+                $factura->forma_pago = $this->forma_pago[$current_forma_pago];
+            }
             $factura->mail_date = $factura->mail_date ? Carbon::parse($factura->mail_date)->format('d/m/Y') : null;
 
             $detalles =  $factura->detalle;
@@ -2467,5 +2473,128 @@ class ClientController extends Controller
         } else {
             return 'tercer';
         }
+    }
+
+    /**
+     * Mostrar formulario para informar pago por CBU/Transferencia
+     */
+    public function informPayment($facturaId)
+    {
+        $user = Auth::user();
+        $factura = Factura::find($facturaId);
+
+        // Verificar que la factura pertenece al usuario y no está pagada
+        if (!$factura || $factura->user_id != $user->id || $factura->fecha_pago) {
+            return redirect('/my-invoice')->with(['status' => 'danger', 'message' => 'Factura no encontrada o ya pagada.', 'icon' => 'fa-frown-o']);
+        }
+
+        // Verificar si ya hay un pago informado pendiente o aprobado
+        $pagoExistente = $factura->pagosInformados()->whereIn('estado', ['pendiente', 'aprobado'])->first();
+        if ($pagoExistente) {
+            $mensaje = $pagoExistente->estado == 'pendiente' 
+                ? 'Ya hay un pago informado pendiente de validación para esta factura.'
+                : 'Esta factura ya tiene un pago aprobado.';
+            return redirect('/my-invoice/detail/' . $factura->id)->with(['status' => 'warning', 'message' => $mensaje, 'icon' => 'fa-exclamation-triangle']);
+        }
+
+        // Formatear datos de la factura
+        $factura->talonario;
+        $factura->talonario->nro_punto_vta = $this->zerofill($factura->talonario->nro_punto_vta, 4);
+        $factura->nro_factura = $this->zerofill($factura->nro_factura);
+        $factura->nro_cliente = $this->zerofill($factura->nro_cliente, 5);
+        $factura->cliente;
+
+        // Calcular importe según vencimiento actual
+        $fechaActual = Carbon::now();
+        $importeCorrespondiente = $this->calcularImporteCorrespondienteCliente($factura, $fechaActual->format('Y-m-d'));
+
+        return View::make('client.inform_payment')->with([
+            'factura' => $factura,
+            'importe_correspondiente' => $importeCorrespondiente
+        ]);
+    }
+
+    /**
+     * Procesar el pago informado por CBU/Transferencia
+     */
+    public function storeInformedPayment(Request $request, $facturaId)
+    {
+        $user = Auth::user();
+        $factura = Factura::find($facturaId);
+
+        // Verificar que la factura pertenece al usuario y no está pagada
+        if (!$factura || $factura->user_id != $user->id || $factura->fecha_pago) {
+            return redirect('/my-invoice')->with(['status' => 'danger', 'message' => 'Factura no encontrada o ya pagada.', 'icon' => 'fa-frown-o']);
+        }
+
+        // Validación
+        $rules = [
+            'importe_informado' => ['required', 'regex:/^-?(?:0|[1-9]\d{0,2}(?:\.\d{3})*)(?:,\d+)?$/'],
+            'fecha_pago_informado' => 'required|date_format:d/m/Y|before_or_equal:today',
+            'tipo_transferencia' => 'required|in:CBU,TRANSFERENCIA,DEPOSITO',
+            'banco_origen' => 'required|max:100',
+            'numero_operacion' => 'required|max:50',
+            'cbu_origen' => 'nullable|max:50',
+            'titular_cuenta' => 'required|max:100',
+            'comprobante' => 'required|mimes:jpeg,png,jpg,gif,pdf|max:2048'
+        ];
+
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return back()->withInput()->withErrors($validator);
+        }
+
+        // Verificar si ya hay un pago informado pendiente o aprobado (doble verificación)
+        $pagoExistente = $factura->pagosInformados()->whereIn('estado', ['pendiente', 'aprobado'])->first();
+        if ($pagoExistente) {
+            $mensaje = $pagoExistente->estado == 'pendiente' 
+                ? 'Ya hay un pago informado pendiente de validación para esta factura.'
+                : 'Esta factura ya tiene un pago aprobado.';
+            return back()->withInput()->with(['status' => 'warning', 'message' => $mensaje, 'icon' => 'fa-exclamation-triangle']);
+        }
+
+        // Procesar archivo de comprobante si existe
+        $comprobantePath = null;
+        if ($request->hasFile('comprobante')) {
+            $file = $request->file('comprobante');
+            $filename = 'comprobante_factura_' . $factura->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+            $comprobantePath = $file->storeAs('comprobantes_pagos', $filename, 'public');
+        }
+
+        // Convertir importe de formato argentino a decimal
+        $importeInformado = $this->floatvalue($request->importe_informado);
+
+        // Crear registro de pago informado
+        $pagoInformado = new PagoInformado();
+        $pagoInformado->factura_id = $factura->id;
+        $pagoInformado->user_id = $user->id;
+        $pagoInformado->importe_informado = $importeInformado;
+        $pagoInformado->fecha_pago_informado = Carbon::createFromFormat('d/m/Y', $request->fecha_pago_informado);
+        $pagoInformado->tipo_transferencia = $request->tipo_transferencia;
+        $pagoInformado->banco_origen = $request->banco_origen;
+        $pagoInformado->numero_operacion = $request->numero_operacion;
+        $pagoInformado->cbu_origen = $request->cbu_origen;
+        $pagoInformado->titular_cuenta = $request->titular_cuenta;
+        $pagoInformado->estado = 'pendiente';
+        $pagoInformado->comprobante_path = $comprobantePath;
+        $pagoInformado->save();
+
+        // Enviar correo de confirmación al cliente
+        try {
+            Mail::send('email.pago_informado_pendiente', ['pagoInformado' => $pagoInformado], function ($message) use ($pagoInformado) {
+                $message->to($pagoInformado->usuario->email, $pagoInformado->usuario->firstname . ' ' . $pagoInformado->usuario->lastname);
+                $message->subject('REDIN - Pago Informado - Pendiente de Validación');
+            });
+        } catch (\Exception $e) {
+            // Log del error pero no interrumpir el flujo
+            Log::error('Error enviando correo de pago informado: ' . $e->getMessage());
+        }
+
+        return redirect('/my-invoice/detail/' . $factura->id)->with([
+            'status' => 'warning', 
+            'message' => 'Pago informado correctamente. Su factura permanecerá PENDIENTE hasta que nuestro equipo valide la información en las próximas 24-48 horas. Se ha enviado un correo de confirmación a su email.', 
+            'icon' => 'fa-clock-o'
+        ]);
     }
 }

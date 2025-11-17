@@ -249,43 +249,34 @@ $(document).ready(function () {
         var columns =  [{ data: "id", name: "id" },
                         { data: "periodo", name: "periodo" },
                         { data: function (obj) {
-
                             return obj.talonario.letra + ' ' + obj.talonario.nro_punto_vta + ' - '+ obj.nro_factura;
-
                             },
                             name: "nro_factura"
                         },
                         { data: "primer_vto_fecha", name: "primer_vto_fecha" },
                         { data: function (obj) {
-
                             return '$'+obj.importe_total;
-
                             }
                         },
                         { data: function (obj) {
-
                             return obj.fecha_pago == null  ? '<span class="label label-danger">Pendiente</span>' : 'Pagada: ' + obj.fecha_pago;
-
                             }
                         },                        
                         { data: function (obj) {
-
                             var detalle = '<a href="/my-invoice/detail/' + obj.id + '" class="btn btn-success btn-xs"><i class="fa fa-folder-open-o"></i> Detalle</a>';
-
                             var btn_accion = '';
                             if (obj.fecha_pago == null && obj.btn_actualizar == true ) {
                                 btn_accion = '<a href="/my-invoice/update/' + obj.id + '" class="btn btn-warning btn-xs"><i class="fa fa-edit"></i> Actualizar</a>';
                             }else{
                                 btn_accion = '<a href="/my-invoice/download/' + obj.id + '" target="_blank" class="btn btn-info btn-xs"><i class="fa fa-download"></i> Descargar</a>';
                             }
-                            
                             var btn_pago = '';
+                            var btn_informar = '';
                             if (obj.fecha_pago == null) {
                                 btn_pago = '<a href="/my-invoice/pay/' + obj.id + '" class="btn btn-primary btn-xs"><i class="fa fa-credit-card"></i> Pagar con Mercado Pago</a>';
+                                btn_informar = '<a href="/my-invoice/inform-payment/' + obj.id + '" class="btn btn-info btn-xs"><i class="fa fa-bank"></i> Informar Pago</a>';
                             }
-                            
-                            return detalle + btn_accion + btn_pago;
-
+                            return detalle + btn_accion + btn_pago + btn_informar;
                             }
                         }
                         ];

@@ -5,16 +5,12 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
-
-use View;
-use Validator;
-use Config;
-
 use Illuminate\Support\Facades\Hash;
 use App\User;
 use App\Usuario;
 use App\Role;
 use App\Permission;
+use App\HomeContent;
 
 
 class HomeController extends Controller
@@ -57,8 +53,24 @@ class HomeController extends Controller
             $servicio->tipo_nombre = $this->getServiceTypeName($servicio->tipo);
         }
 
-        // landimng page final
-        return View::make('landing')->with(['servicios' => $servicios, 'serviciosInternet' => $serviciosInternet]);
+
+        // Obtener configuración global de la home (HomeSetting)
+        $homeSettings = \App\HomeSetting::all()->keyBy('key');
+
+        // Obtener contenido dinámico del CMS (secciones)
+        $homeContents = HomeContent::where('is_active', 1)->orderBy('sort_order')->get();
+        $contentSections = [];
+        foreach ($homeContents as $content) {
+            $contentSections[$content->section] = $content;
+        }
+
+        // landing page final
+        return view('landing')->with([
+            'servicios' => $servicios, 
+            'serviciosInternet' => $serviciosInternet,
+            'contentSections' => $contentSections,
+            'homeSettings' => $homeSettings
+        ]);
 
 
         // send Mail
@@ -81,7 +93,7 @@ class HomeController extends Controller
         
         } else {
         
-            return View::make('home');
+            return view('home');
         
         }   
     }
@@ -97,11 +109,11 @@ class HomeController extends Controller
             'password'    => 'required',
         );
 
-        $validator = Validator::make($request->all(), $rules);
+        $validator = validator($request->all(), $rules);
         
         if($validator->fails())
         {       
-          return redirect::back()->withInput()->withErrors($validator);
+          return redirect()->back()->withInput()->withErrors($validator);
         }
         //-- VALIDATOR END --//
 
@@ -140,7 +152,7 @@ class HomeController extends Controller
             'message' => 'required',
         );
 
-        $validator = Validator::make($request->all(), $rules);
+        $validator = validator($request->all(), $rules);
         
         if($validator->fails())
         {       
@@ -192,7 +204,7 @@ class HomeController extends Controller
         
         } else {
         
-            return View::make('home_admin');
+            return view('home_admin');
         
         }   
     }
@@ -208,11 +220,11 @@ class HomeController extends Controller
             'password'    => 'required',
         );
 
-        $validator = Validator::make($request->all(), $rules);
+        $validator = validator($request->all(), $rules);
         
         if($validator->fails())
         {       
-          return redirect::back()->withInput()->withErrors($validator);
+          return redirect()->back()->withInput()->withErrors($validator);
         }
         //-- VALIDATOR END --//
 

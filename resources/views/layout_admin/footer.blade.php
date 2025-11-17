@@ -75,8 +75,65 @@
     
     <!-- Main Script -->
     <script src="/_admin/js/script.js"></script>
-    
 
+    <script>console.log('layout_admin footer loaded');</script>
+    @stack('scripts')
+    <script>
+      try {
+        if (!window.jQuery) {
+          console.warn('jQuery not found at footer fallback');
+        } else {
+          if (typeof window.aprobarPago === 'undefined' || typeof window.rechazarPago === 'undefined') {
+            console.warn('admin.payments.informed functions not present; adding fallback handlers');
+            (function($){
+              $(document).on('click', '.btn-aprobar-pago', function(e){
+                var id = $(this).data('pago-id') || $(this).attr('data-pago-id');
+                console.warn('fallback aprobrar click id=', id);
+                if (window.aprobarPago) window.aprobarPago(id);
+              });
+              $(document).on('click', '.btn-rechazar-pago', function(e){
+                var id = $(this).data('pago-id') || $(this).attr('data-pago-id');
+                console.warn('fallback rechazar click id=', id);
+                if (window.rechazarPago) window.rechazarPago(id);
+              });
+            })(window.jQuery);
+            // Also try to dynamically load the external script if it wasn't loaded
+            try {
+              var dynamicScriptUrl = "<?php echo e(asset('_admin/js/admin.payments.informed.js')); ?>" + '?_=' + (new Date()).getTime();
+              console.warn('attempting to dynamically load: ', dynamicScriptUrl);
+              if (typeof $.getScript === 'function') {
+                $.getScript(dynamicScriptUrl)
+                  .done(function() {
+                    console.log('getScript: loaded admin.payments.informed.js dynamically');
+                  })
+                  .fail(function() {
+                    console.error('getScript: failed to load admin.payments.informed.js dynamically');
+                    // Try direct append of script tag
+                    var s = document.createElement('script');
+                    s.src = dynamicScriptUrl;
+                    s.async = true;
+                    s.onload = function() { console.log('dynamic appended script loaded'); };
+                    s.onerror = function() { console.error('dynamic appended script failed'); };
+                    document.head.appendChild(s);
+                  });
+              } else {
+                console.warn('$.getScript is not available, appending script tag directly');
+                var s = document.createElement('script');
+                s.src = dynamicScriptUrl;
+                s.async = true;
+                s.onload = function() { console.log('appended script loaded'); };
+                s.onerror = function() { console.error('appended script failed'); };
+                document.head.appendChild(s);
+              }
+            } catch(err) {
+              console.error('getScript threw', err);
+            }
+          }
+        }
+      } catch(err) {
+        console.error('Error in footer fallback script', err);
+      }
+    </script>
 
   </body>
 </html>
