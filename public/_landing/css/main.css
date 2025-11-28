@@ -185,7 +185,7 @@ section {
   transition-property: opacity;
   background-repeat: no-repeat;
   background-size: cover;
-  height: 2037px;
+  height: 100vh;
 }
 
 .carousel-fade .carousel-inner .item:after {

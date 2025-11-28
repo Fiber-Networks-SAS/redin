@@ -38,7 +38,7 @@
   <header id="home">
     <div id="home-slider" class="carousel slide carousel-fade" data-ride="carousel">
       <div class="carousel-inner">
-        <div class="item active" style="background-image: url({{ isset($homeSettings['slider_bg']) ? $homeSettings['slider_bg']->value : '/_landing/images/slider/1.jpg' }})">
+        <div class="item active" style="background-image: url('{{ isset($homeSettings['slider_bg']) && !empty($homeSettings['slider_bg']->value) ? (strpos($homeSettings['slider_bg']->value, '/') === 0 ? asset($homeSettings['slider_bg']->value) : asset('storage/' . $homeSettings['slider_bg']->value)) : '/_landing/images/slider/1.jpg' }}') !important; background-repeat: no-repeat; background-size: cover; background-position: center;">
           <div class="caption">
             <h1 class="">{{ isset($homeSettings['slider_title']) ? $homeSettings['slider_title']->value : (isset($contentSections['slider']) ? $contentSections['slider']->title : 'ReDin') }}</h1>
             <p class="animated fadeInRightBig">{{ isset($homeSettings['slider_subtitle']) ? $homeSettings['slider_subtitle']->value : (isset($contentSections['slider']) ? $contentSections['slider']->subtitle : 'Lider en Telecomunicaciones') }}</p>
@@ -92,6 +92,7 @@
       </div>
     </div><!--/#main-nav-->
   </header><!--/#home-->
+  <!-- Debug: Slider BG value: {{ isset($homeSettings['slider_bg']) ? $homeSettings['slider_bg']->value : 'not set' }} -->
   <section id="services">
     <div class="container">
       <div class="heading wow fadeInUp" data-wow-duration="1000ms" data-wow-delay="300ms">

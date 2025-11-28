@@ -25,7 +25,7 @@
           </div>
           <div class="x_content">
 
-            <form method="POST" action="{{ url('/admin/home-contents') }}" enctype="multipart/form-data" class="form-horizontal form-label-left">
+            <form method="POST" action="{{ url('/admin/home-contents/create') }}" enctype="multipart/form-data" class="form-horizontal form-label-left">
               {{ csrf_field() }}
 
               <div class="form-group {{ $errors->has('section') ? 'has-error' : '' }}">
@@ -71,7 +71,14 @@
                 </div>
               </div>
 
-              <!-- Campo imagen eliminado -->
+              <div class="form-group {{ $errors->has('image') ? 'has-error' : '' }}">
+                <label class="control-label col-md-3 col-sm-3 col-xs-12" for="image">Imagen</label>
+                <div class="col-md-6 col-sm-6 col-xs-12">
+                  <input type="file" class="form-control" name="image" id="image" accept="image/*">
+                  @if ($errors->has('image')) <p class="help-block">{{ $errors->first('image') }}</p> @endif
+                  <p class="help-block">Seleccione una imagen para la sección (opcional)</p>
+                </div>
+              </div>
 
               <div class="form-group {{ $errors->has('link_text') ? 'has-error' : '' }}">
                 <label class="control-label col-md-3 col-sm-3 col-xs-12" for="link_text">Texto del Enlace</label>
