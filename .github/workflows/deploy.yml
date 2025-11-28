@@ -1,0 +1,29 @@
+name: Deploy to Testing
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          ssh-keyscan -p 5389 -H ${{ secrets.MI_SERVIDOR }} >> ~/.ssh/known_hosts
+      - name: Deploy to server
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.MI_SERVIDOR }}
+          port: 5389
+          username: testingserver
+          password: ${{ secrets.SSH_PASSWORD }}
+          script: |
+            set -e
+            cd /var/www/html/redin
+            git fetch
+            git reset --hard origin/main
+            php7.4 /usr/bin/composer install --no-dev --optimize-autoloader
