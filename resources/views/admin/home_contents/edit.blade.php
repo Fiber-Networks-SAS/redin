@@ -71,7 +71,17 @@
                 </div>
               </div>
 
-              <!-- Campo imagen eliminado -->
+              <div class="form-group {{ $errors->has('image') ? 'has-error' : '' }}">
+                <label class="control-label col-md-3 col-sm-3 col-xs-12" for="image">Imagen</label>
+                <div class="col-md-6 col-sm-6 col-xs-12">
+                  @if($content->image_path)
+                    <div style="margin-bottom:10px;"><img src="{{ asset('storage/' . $content->image_path) }}" alt="Imagen actual" style="max-width:300px;"></div>
+                  @endif
+                  <input type="file" class="form-control" name="image" id="image" accept="image/*">
+                  @if ($errors->has('image')) <p class="help-block">{{ $errors->first('image') }}</p> @endif
+                  <p class="help-block">Seleccione una nueva imagen para reemplazar la actual (opcional)</p>
+                </div>
+              </div>
 
               <div class="form-group {{ $errors->has('link_text') ? 'has-error' : '' }}">
                 <label class="control-label col-md-3 col-sm-3 col-xs-12" for="link_text">Texto del Enlace</label>

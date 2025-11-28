@@ -46,10 +46,10 @@
                                     <label for="slider_bg" class="control-label col-md-3 col-sm-3 col-xs-12">Imagen de fondo del slider</label>
                                     <div class="col-md-7 col-sm-7 col-xs-12">
                                         @if(isset($settings['slider_bg']) && !empty($settings['slider_bg']->value))
-                                            <div style="margin-bottom:10px;"><img src="{{ asset($settings['slider_bg']->value) }}" alt="Fondo actual" style="max-width:300px;"></div>
+                                            <div style="margin-bottom:10px;"><img src="{{ asset('storage/' . $settings['slider_bg']->value) }}" alt="Fondo actual" style="max-width:300px;"></div>
                                         @endif
-                                        <input type="text" class="form-control" id="slider_bg" name="slider_bg" value="{{ isset($settings['slider_bg']) ? $settings['slider_bg']->value : '' }}">
-                                        <small>Coloca la ruta o URL de la imagen. (Ej: /_landing/images/slider/1.jpg)</small>
+                                        <input type="file" class="form-control" id="slider_bg" name="slider_bg" accept="image/*">
+                                        <small>Selecciona una imagen para el fondo del slider (opcional, reemplazará la actual).</small>
                                     </div>
                                 </div>
                             </div>

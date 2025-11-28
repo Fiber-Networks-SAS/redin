@@ -58,6 +58,7 @@ class HomeContentController extends Controller
             'title' => 'nullable|string|max:255',
             'subtitle' => 'nullable|string|max:255',
             'content' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'link_text' => 'nullable|string|max:100',
             'link_url' => 'nullable|string|max:255',
             'is_active' => 'boolean',
@@ -70,11 +71,20 @@ class HomeContentController extends Controller
             return back()->withInput()->withErrors($validator);
         }
 
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
+            $filename = time() . '_' . $file->getClientOriginalName();
+            $file->move(public_path('storage/home_contents'), $filename);
+            $imagePath = 'home_contents/' . $filename;
+        }
+
         HomeContent::create([
             'section' => $request->input('section'),
             'title' => $request->input('title'),
             'subtitle' => $request->input('subtitle'),
             'content' => $request->input('content'),
+            'image_path' => $imagePath,
             'link_text' => $request->input('link_text'),
             'link_url' => $request->input('link_url'),
             'is_active' => $request->has('is_active'),
@@ -128,6 +138,7 @@ class HomeContentController extends Controller
             'title' => 'nullable|string|max:255',
             'subtitle' => 'nullable|string|max:255',
             'content' => 'nullable|string',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'link_text' => 'nullable|string|max:100',
             'link_url' => 'nullable|string|max:255',
             'is_active' => 'boolean',
@@ -140,7 +151,7 @@ class HomeContentController extends Controller
             return back()->withInput()->withErrors($validator);
         }
 
-        $content->update([
+        $updateData = [
             'section' => $request->input('section'),
             'title' => $request->input('title'),
             'subtitle' => $request->input('subtitle'),
@@ -149,7 +160,20 @@ class HomeContentController extends Controller
             'link_url' => $request->input('link_url'),
             'is_active' => $request->has('is_active'),
             'sort_order' => $request->input('sort_order', 0)
-        ]);
+        ];
+
+        if ($request->hasFile('image')) {
+            // Delete old image if exists
+            if ($content->image_path && file_exists(public_path('storage/' . $content->image_path))) {
+                unlink(public_path('storage/' . $content->image_path));
+            }
+            $file = $request->file('image');
+            $filename = time() . '_' . $file->getClientOriginalName();
+            $file->move(public_path('storage/home_contents'), $filename);
+            $updateData['image_path'] = 'home_contents/' . $filename;
+        }
+
+        $content->update($updateData);
 
         return redirect('/admin/home-contents')->with(['status' => 'success', 'message' => 'Contenido actualizado correctamente.', 'icon' => 'fa-check']);
     }
@@ -165,7 +189,10 @@ class HomeContentController extends Controller
             return response()->json(['error' => 'Contenido no encontrado'], 404);
         }
 
-
+        // Delete associated image if exists
+        if ($content->image_path && file_exists(public_path('storage/' . $content->image_path))) {
+            unlink(public_path('storage/' . $content->image_path));
+        }
 
         $content->delete();
 
