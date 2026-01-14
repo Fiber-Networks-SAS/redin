@@ -57,6 +57,23 @@ class User extends Authenticatable implements AuditableContract
         return $this->hasMany('App\Factura');
     } 
 
+    public function saldosFavor()
+    {
+        return $this->hasMany('App\SaldoFavor', 'user_id');
+    }
+
+    public function saldosFavorDisponibles()
+    {
+        return $this->hasMany('App\SaldoFavor', 'user_id')
+            ->where('importe_disponible', '>', 0)
+            ->whereIn('estado', ['pendiente', 'parcial']);
+    }
+
+    public function getTotalSaldoFavor()
+    {
+        return $this->saldosFavorDisponibles()->sum('importe_disponible');
+    }
+
     public function reclamos()
     {
         return $this->hasMany('App\Reclamo', 'user_from', 'id');

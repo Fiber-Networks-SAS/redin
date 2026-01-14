@@ -244,6 +244,10 @@ Route::group(['prefix' => 'admin'], function() {
 		Route::get('/period/view/list/{mes}/{ano}', 'BillController@getBillPeriodList'); 	// request for fill Table (via Ajax)
 		Route::get('/period/send/{mes}/{ano}', 'BillController@sendEmailFacturasPeriodo');
 		
+		// anular período completo
+		Route::get('/period/cancel/{mes}/{ano}', 'BillController@cancelPeriod');
+		Route::post('/period/cancel/{mes}/{ano}', 'BillController@cancelPeriodPost');
+		
 		Route::get('/period/bill/{id}', 'BillController@getBillDetail');
 		Route::post('/period/bill-edit/{id}', 'BillController@getBillEditPost');
 
