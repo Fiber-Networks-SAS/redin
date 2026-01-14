@@ -73,8 +73,8 @@ class AfipService
             return [
                 'CAE' => 'DISABLED_' . date('YmdHis'),
                 'CAEFchVto' => date('Ymd', strtotime('+10 days')),
-                'CbteDesde' => 1,
-                'CbteHasta' => 1,
+                'CbteDesde' => $data['CbteDesde'] ?? 1,
+                'CbteHasta' => $data['CbteHasta'] ?? 1,
                 'Resultado' => 'A',
                 'Observaciones' => 'AFIP deshabilitado por configuración'
             ];
@@ -84,6 +84,16 @@ class AfipService
         try {
             $result = $this->afip->ElectronicBilling->CreateVoucher($data);
             \Log::info('AFIP - Respuesta completa del voucher', $result);
+            
+            // IMPORTANTE: AFIP no siempre retorna CbteDesde/CbteHasta en la respuesta
+            // Preservar los valores enviados para evitar errores
+            if (!isset($result['CbteDesde'])) {
+                $result['CbteDesde'] = $data['CbteDesde'];
+            }
+            if (!isset($result['CbteHasta'])) {
+                $result['CbteHasta'] = $data['CbteHasta'];
+            }
+            
             return $result;
         } catch (\Exception $e) {
             \Log::error('AFIP - Error al crear voucher: ' . $e->getMessage());

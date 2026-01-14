@@ -41,6 +41,7 @@ use App\ImportCe;
 use App\PaymentPreference;
 use App\PagoInformado;
 use App\NotaCredito;
+use App\SaldoFavor;
 use App\Services\AfipService;
 use App\Services\PaymentQRService;
 
@@ -104,7 +105,7 @@ class BillController extends Controller
 
         $this->tipo = ['Internet', 'Telefon�a', 'Televisi�n'];
         $this->drop = ['En Pilar', 'En Domicilio', 'Sin Drop'];
-        $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express', 4 => 'Mercado Pago', 6 => 'CBU/Transferencia']; // 4 => 'Tarjeta de Cr�dito', 5 => 'Dep�sito'
+        $this->forma_pago = [1 => 'Efectivo', 2 => 'Pago Mis Cuentas', 3 => 'Cobro Express', 4 => 'Mercado Pago', 5 => 'Saldo a Favor', 6 => 'CBU/Transferencia']; // 4 => 'Tarjeta de Cr�dito', 5 => 'Dep�sito'
         $this->meses = [
             '01' => 'ENERO',
             '02' => 'FEBRERO',
@@ -131,7 +132,11 @@ class BillController extends Controller
     public function getList(Request $request)
     {
         $periodos = [];
-        $facturas = Factura::select(['id', 'periodo', 'fecha_pago', 'nro_cliente', 'importe_total', 'mail_date'])->get()->groupBy('periodo');
+        // Filtrar solo facturas activas (no anuladas)
+        $facturas = Factura::select(['id', 'periodo', 'fecha_emision', 'fecha_pago', 'nro_cliente', 'importe_total', 'mail_date'])
+            ->whereNull('deleted_at')
+            ->get()
+            ->groupBy('periodo');
         // return $facturas;
 
         foreach ($facturas as $periodo => $factura) {
@@ -190,7 +195,8 @@ class BillController extends Controller
 
         $fecha_actual = Carbon::today();
         $periodo = $mes . '/' . $ano;
-        $facturas = Factura::where('periodo', $periodo)->get();
+        // Filtrar solo facturas activas (no anuladas)
+        $facturas = Factura::where('periodo', $periodo)->whereNull('deleted_at')->get();
 
         foreach ($facturas as $factura) {
 
@@ -539,9 +545,19 @@ class BillController extends Controller
                         $nota->importe_total = $this->floatvalue($request->importe_bonificacion) * 1.21;
                         $nota->cae = isset($afipResponse['CAE']) ? $afipResponse['CAE'] : null;
                         try {
-                            $nota->cae_vto = isset($afipResponse['CAEFchVto']) ? Carbon::createFromFormat('Ymd', $afipResponse['CAEFchVto']) : null;
+                            if (isset($afipResponse['CAEFchVto'])) {
+                                $caeVto = $afipResponse['CAEFchVto'];
+                                // AFIP puede devolver en formato Ymd (20260121) o Y-m-d (2026-01-21)
+                                if (strlen($caeVto) == 8 && is_numeric($caeVto)) {
+                                    $nota->cae_vto = Carbon::createFromFormat('Ymd', $caeVto);
+                                } else {
+                                    $nota->cae_vto = Carbon::parse($caeVto);
+                                }
+                            } else {
+                                $nota->cae_vto = null;
+                            }
                         } catch (\Exception $e) {
-                            Log::error('Error parsing CAEFchVto: ' . $e->getMessage());
+                            Log::error('Error parsing CAEFchVto: ' . $e->getMessage(), ['cae_vto' => $afipResponse['CAEFchVto'] ?? 'N/A']);
                             $nota->cae_vto = null;
                         }
                         $nota->fecha_emision = Carbon::now();
@@ -586,9 +602,19 @@ class BillController extends Controller
                                 $nota->importe_total = $this->floatvalue($request->importe_bonificacion) * 1.21;
                                 $nota->cae = isset($afipResponse['CAE']) ? $afipResponse['CAE'] : null;
                                 try {
-                                    $nota->cae_vto = isset($afipResponse['CAEFchVto']) ? Carbon::createFromFormat('Y-m-d', $afipResponse['CAEFchVto']) : null;
+                                    if (isset($afipResponse['CAEFchVto'])) {
+                                        $caeVto = $afipResponse['CAEFchVto'];
+                                        // AFIP puede devolver en formato Ymd (20260121) o Y-m-d (2026-01-21)
+                                        if (strlen($caeVto) == 8 && is_numeric($caeVto)) {
+                                            $nota->cae_vto = Carbon::createFromFormat('Ymd', $caeVto);
+                                        } else {
+                                            $nota->cae_vto = Carbon::parse($caeVto);
+                                        }
+                                    } else {
+                                        $nota->cae_vto = null;
+                                    }
                                 } catch (\Exception $e) {
-                                    Log::error('Error parsing CAEFchVto: ' . $e->getMessage());
+                                    Log::error('Error parsing CAEFchVto: ' . $e->getMessage(), ['cae_vto' => $afipResponse['CAEFchVto'] ?? 'N/A']);
                                     $nota->cae_vto = null;
                                 }
                                 $nota->fecha_emision = Carbon::now();
@@ -941,7 +967,7 @@ class BillController extends Controller
         }
 
         // obtengo el siguiente mes a facturar 
-        $factura    = Factura::orderBy('id', 'desc')->first();
+        $factura    = Factura::whereNull('deleted_at')->orderBy('id', 'desc')->first();
 
         if ($factura && $factura->periodo && preg_match('/^\d{1,2}\/\d{4}$/', $factura->periodo)) {
             try {
@@ -971,7 +997,7 @@ class BillController extends Controller
         //-- VALIDATOR START --//
         $rules = array(
             'fecha_emision' => 'required|date_format:d/m/Y',
-            'periodo'       => 'required|unique:facturas,periodo|date_format:m/Y',
+            'periodo'       => 'required|unique:facturas,periodo,NULL,id,deleted_at,NULL|date_format:m/Y',
         );
 
         $validator = Validator::make($request->all(), $rules);
@@ -1175,20 +1201,180 @@ class BillController extends Controller
                 // guardo la factura
                 if ($factura->save()) {
 
-                    // Emitir factura en AFIP
+                    // **APLICAR SALDO A FAVOR SI EXISTE PARA ESTE PERÍODO**
                     try {
-                        if ($talonario->letra == 'A') {
-                            $afipResponse = $this->afipService->facturaA(
-                                $talonario->nro_punto_vta,
-                                $item['cliente']->dni,
-                                $factura->importe_total
-                            );
+                        $periodoFactura = $factura->periodo; // Formato MM/YYYY
+                        $saldoDisponible = $this->getTotalSaldoFavorCliente($factura->user_id, $periodoFactura);
+                        
+                        Log::info('=== VERIFICANDO SALDO A FAVOR ===', [
+                            'user_id' => $factura->user_id,
+                            'factura_id' => $factura->id,
+                            'periodo' => $periodoFactura,
+                            'saldo_disponible' => $saldoDisponible,
+                            'importe_factura' => $factura->importe_total
+                        ]);
+                        
+                        if ($saldoDisponible > 0) {
+                            Log::info('APLICANDO saldo a favor del período', [
+                                'user_id' => $factura->user_id,
+                                'periodo' => $periodoFactura,
+                                'saldo' => $saldoDisponible
+                            ]);
+                            
+                            $resultado = $this->aplicarSaldoFavorAFactura($factura->user_id, $factura->id, $factura->importe_total, $periodoFactura);
+                            $importeDescontado = $resultado['importe_descontado'];
+                            
+                            Log::info('RESULTADO aplicación saldo', [
+                                'importe_descontado' => $importeDescontado,
+                                'saldos_aplicados_count' => count($resultado['saldos_aplicados'])
+                            ]);
+                            
+                            if ($importeDescontado > 0) {
+                                $descripcion = 'Saldo a favor aplicado';
+                                $caesOriginales = [];
+                                
+                                if (count($resultado['saldos_aplicados']) > 0) {
+                                    $periodos = [];
+                                    foreach ($resultado['saldos_aplicados'] as $saldoAplicado) {
+                                        // Cargar saldo con factura anulada (incluyendo soft deleted)
+                                        $saldo = SaldoFavor::with(['facturaAnulada' => function($query) {
+                                            $query->withTrashed();
+                                        }])->find($saldoAplicado['saldo_id']);
+                                        
+                                        Log::info('DEBUG Saldo recuperado', [
+                                            'saldo_id' => $saldoAplicado['saldo_id'],
+                                            'saldo_existe' => !is_null($saldo),
+                                            'factura_anulada_id' => $saldo ? $saldo->factura_anulada_id : null,
+                                            'tiene_factura_anulada' => $saldo && $saldo->facturaAnulada ? true : false,
+                                            'cae_factura_anulada' => $saldo && $saldo->facturaAnulada ? $saldo->facturaAnulada->cae : null
+                                        ]);
+                                        
+                                        if ($saldo) {
+                                            $periodos[] = $saldo->periodo;
+                                            
+                                            // **RECUPERAR CAE DE LA FACTURA ORIGINAL**
+                                            if ($saldo->facturaAnulada && $saldo->facturaAnulada->cae) {
+                                                $caesOriginales[] = [
+                                                    'factura_id' => $saldo->facturaAnulada->id,
+                                                    'nro_factura' => $saldo->facturaAnulada->nro_factura,
+                                                    'cae' => $saldo->facturaAnulada->cae,
+                                                    'cae_vto' => $saldo->facturaAnulada->cae_vto,
+                                                    'periodo' => $saldo->periodo,
+                                                    'importe_aplicado' => $saldoAplicado['importe_aplicado']
+                                                ];
+                                            }
+                                        }
+                                    }
+                                    $periodos = array_unique($periodos);
+                                    $descripcion .= ' de período(s): ' . implode(', ', $periodos);
+                                }
+                                
+                                // **REGISTRAR CAEs ORIGINALES EN LOG Y ASIGNAR A LA FACTURA**
+                                if (!empty($caesOriginales)) {
+                                    Log::info('CAEs DE FACTURAS ORIGINALES APLICADAS', [
+                                        'factura_nueva_id' => $factura->id,
+                                        'nro_factura_nueva' => $factura->nro_factura,
+                                        'periodo_nueva' => $factura->periodo,
+                                        'caes_originales' => $caesOriginales,
+                                        'total_aplicado' => $importeDescontado
+                                    ]);
+                                    
+                                    // **ASIGNAR EL CAE ORIGINAL A LA NUEVA FACTURA**
+                                    // Si hay un único CAE original, usarlo directamente
+                                    if (count($caesOriginales) == 1) {
+                                        $factura->cae = $caesOriginales[0]['cae'];
+                                        $factura->cae_vto = $caesOriginales[0]['cae_vto'] ?? null;
+                                        
+                                        Log::info('CAE ORIGINAL ASIGNADO A FACTURA NUEVA', [
+                                            'factura_nueva_id' => $factura->id,
+                                            'cae_original' => $factura->cae,
+                                            'factura_original_id' => $caesOriginales[0]['factura_id']
+                                        ]);
+                                    }
+                                }
+                                
+                                Log::info('CREANDO bonificación puntual', [
+                                    'factura_id' => $factura->id,
+                                    'importe' => $importeDescontado,
+                                    'descripcion' => $descripcion
+                                ]);
+                                
+                                $bonificacion = $this->crearBonificacionPorSaldoFavor($factura->id, $importeDescontado, $descripcion);
+                                
+                                Log::info('BONIFICACIÓN CREADA', [
+                                    'bonificacion_id' => $bonificacion->id,
+                                    'factura_id' => $factura->id,
+                                    'importe' => $bonificacion->importe
+                                ]);
+                                
+                                $factura->importe_bonificacion += $importeDescontado;
+                                $factura->importe_total -= $importeDescontado;
+                                if ($factura->importe_total < 0) $factura->importe_total = 0;
+                                
+                                // **RECALCULAR VENCIMIENTOS CON EL NUEVO IMPORTE_TOTAL**
+                                $factura->primer_vto_codigo = $this->getCodigoPago($factura->importe_total, $factura->primer_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
+                                $factura->segundo_vto_importe = $this->getImporteConTasaInteres($factura->importe_total, $interes->segundo_vto_tasa);
+                                $factura->segundo_vto_codigo = $this->getCodigoPago($factura->segundo_vto_importe, $factura->segundo_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
+                                
+                                $factura->save();
+                                
+                                Log::info('FACTURA ACTUALIZADA con saldo', [
+                                    'factura_id' => $factura->id,
+                                    'importe_bonificacion' => $factura->importe_bonificacion,
+                                    'importe_total' => $factura->importe_total,
+                                    'primer_vto_codigo' => $factura->primer_vto_codigo,
+                                    'segundo_vto_importe' => $factura->segundo_vto_importe,
+                                    'segundo_vto_codigo' => $factura->segundo_vto_codigo
+                                ]);
+                                
+                                // **SI EL SALDO CUBRIÓ TODO, MARCAR COMO PAGADA**
+                                if ($factura->importe_total == 0) {
+                                    $factura->importe_pago = 0;
+                                    $factura->forma_pago = 5; // Saldo a favor
+                                    $factura->fecha_pago = \Carbon\Carbon::now();
+                                    $factura->save();
+                                    
+                                    Log::info('FACTURA MARCADA COMO PAGADA', [
+                                        'factura_id' => $factura->id,
+                                    ]);
+                                }
+                            } else {
+                                Log::warning('SALDO NO APLICADO - importe descontado es 0');
+                            }
                         } else {
-                            $afipResponse = $this->afipService->facturaB(
-                                $talonario->nro_punto_vta,
-                                $factura->importe_total
-                            );
+                            Log::info('No hay saldo disponible para este cliente en este período', [
+                                'periodo' => $periodoFactura
+                            ]);
                         }
+                    } catch (\Exception $eSaldo) {
+                        Log::error('ERROR aplicando saldo a favor', [
+                            'mensaje' => $eSaldo->getMessage(),
+                            'archivo' => $eSaldo->getFile(),
+                            'linea' => $eSaldo->getLine(),
+                            'trace' => $eSaldo->getTraceAsString()
+                        ]);
+                    }
+
+                    // **EMITIR FACTURA EN AFIP SOLO SI NO ESTÁ CUBIERTA POR SALDO A FAVOR**
+                    // Si importe_total = 0, significa que el saldo cubrió todo y permanece la factura original
+                    $debeEmitirEnAfip = $factura->importe_total > 0;
+                    
+                    if ($debeEmitirEnAfip) {
+                        // Emitir factura en AFIP
+                        try {
+                            if ($talonario->letra == 'A') {
+                                $afipResponse = $this->afipService->facturaA(
+                                    $talonario->nro_punto_vta,
+                                    $item['cliente']->dni,
+                                    $factura->importe_total
+                                );
+                            } else {
+                                $afipResponse = $this->afipService->facturaB(
+                                    $talonario->nro_punto_vta,
+                                    $factura->importe_total
+                                );
+                            }
+                        
 
                         Log::info('Respuesta AFIP factura peri�dica', $afipResponse);
 
@@ -1196,9 +1382,38 @@ class BillController extends Controller
                         if (isset($afipResponse['CAE']) && !empty($afipResponse['CAE'])) {
                             $factura->cae = $afipResponse['CAE'];
                             try {
-                                $factura->cae_vto = isset($afipResponse['CAEFchVto']) ? Carbon::createFromFormat('Ymd', $afipResponse['CAEFchVto']) : null;
+                                if (isset($afipResponse['CAEFchVto'])) {
+                                    $caeVto = $afipResponse['CAEFchVto'];
+                                    
+                                    Log::info('DEBUG CAEFchVto', [
+                                        'valor' => $caeVto,
+                                        'tipo' => gettype($caeVto),
+                                        'longitud' => strlen($caeVto),
+                                        'es_numerico' => is_numeric($caeVto)
+                                    ]);
+                                    
+                                    // AFIP puede devolver en formato Ymd (20260121) o Y-m-d (2026-01-23)
+                                    if (strlen($caeVto) == 8 && is_numeric($caeVto)) {
+                                        Log::info('Usando formato Ymd');
+                                        $factura->cae_vto = Carbon::createFromFormat('Ymd', $caeVto);
+                                    } else {
+                                        Log::info('Usando Carbon::parse para formato: ' . $caeVto);
+                                        // Asegurar que sea string
+                                        $caeVtoStr = (string)$caeVto;
+                                        $factura->cae_vto = Carbon::parse($caeVtoStr);
+                                    }
+                                    
+                                    Log::info('CAEFchVto parseado correctamente', ['resultado' => $factura->cae_vto]);
+                                } else {
+                                    $factura->cae_vto = null;
+                                }
                             } catch (\Exception $e) {
-                                Log::error('Error parsing CAEFchVto en factura peri�dica: ' . $e->getMessage());
+                                Log::error('Error parsing CAEFchVto en factura periódica', [
+                                    'mensaje' => $e->getMessage(),
+                                    'cae_vto_original' => $afipResponse['CAEFchVto'] ?? 'N/A',
+                                    'tipo' => gettype($afipResponse['CAEFchVto'] ?? null),
+                                    'trace' => $e->getTraceAsString()
+                                ]);
                                 $factura->cae_vto = null;
                             }
                             $factura->save();
@@ -1206,9 +1421,21 @@ class BillController extends Controller
                         } else {
                             Log::warning('AFIP no devolvi� CAE v�lido para factura peri�dica', ['factura_id' => $factura->id, 'afip_response' => $afipResponse]);
                         }
-                    } catch (\Exception $e) {
-                        Log::error('Error al emitir factura peri�dica en AFIP: ' . $e->getMessage());
-                        // No interrumpe el proceso, la factura se guarda sin CAE
+                        } 
+                        catch (\Exception $e) {
+                            Log::error('Error al emitir factura peri�dica en AFIP: ' . $e->getMessage());
+                            // No interrumpe el proceso, la factura se guarda sin CAE
+                        }
+                    } else {
+                        // Factura cubierta completamente por saldo a favor - NO se emite en AFIP
+                        Log::info('Factura NO emitida en AFIP - Cubierta por saldo a favor', [
+                            'factura_id' => $factura->id,
+                            'nro_factura' => $factura->nro_factura,
+                            'periodo' => $factura->periodo,
+                            'importe_total' => $factura->importe_total,
+                            'importe_bonificacion' => $factura->importe_bonificacion,
+                            'forma_pago' => $factura->forma_pago
+                        ]);
                     }
 
                     // Detalle
@@ -1322,6 +1549,7 @@ class BillController extends Controller
 
         // get factura from user
         $factura = Factura::where('user_id', $user->id)
+            ->whereNull('deleted_at')
             ->orderBy('id', 'desc')
             ->first();
 
@@ -1479,6 +1707,7 @@ class BillController extends Controller
 
         // obtengo las facturas del cliente
         $facturas = Factura::where('user_id', $user_id)
+            ->whereNull('deleted_at')
             ->get();
 
         foreach ($facturas as $factura) {
@@ -1509,6 +1738,7 @@ class BillController extends Controller
         // obtengo las facturas del cliente
         $facturas = Factura::where('user_id', $user_id)
             // ->where('periodo', $periodo)
+            ->whereNull('deleted_at')
             ->get();
 
         if (count($facturas) == 0) {
@@ -1760,7 +1990,7 @@ class BillController extends Controller
         $i  = 1;
         $ln = "\n";
         $periodo                = $mes . '/' . $ano;
-        $facturas               = Factura::where('periodo', $periodo)->get();
+        $facturas               = Factura::where('periodo', $periodo)->whereNull('deleted_at')->get();
         $facturasTotalCantidad  = 0;
         $facturasTotalImporte   = 0;
         $codEmpresa             = '8699';
@@ -1909,7 +2139,7 @@ class BillController extends Controller
     {
 
         $periodo = $mes . '/' . $ano;
-        $facturas = Factura::where('periodo', $periodo)->get();
+        $facturas = Factura::where('periodo', $periodo)->whereNull('deleted_at')->get();
 
         foreach ($facturas as $factura) {
 
@@ -1986,7 +2216,7 @@ class BillController extends Controller
     {
 
         $fecha_actual = Carbon::today();
-        $facturas = Factura::with(['talonario', 'cliente', 'detalle.servicio'])->get();
+        $facturas = Factura::with(['talonario', 'cliente', 'detalle.servicio'])->whereNull('deleted_at')->get();
 
         foreach ($facturas as $factura) {
 
@@ -2037,7 +2267,7 @@ class BillController extends Controller
     public function balance()
     {
 
-        $facturas = Factura::orderBy('id', 'desc')->get();
+        $facturas = Factura::whereNull('deleted_at')->orderBy('id', 'desc')->get();
 
         $periodos = [];
         foreach ($facturas as $factura) {
@@ -2085,7 +2315,7 @@ class BillController extends Controller
     {
 
         // get facturas
-        $facturas = Factura::orderBy('id', 'ASC');
+        $facturas = Factura::whereNull('deleted_at')->orderBy('id', 'ASC');
         if ($request->periodo != '') {
             $facturas = $facturas->where('periodo', $request->periodo);
         }
@@ -2364,7 +2594,7 @@ class BillController extends Controller
         $date_to = Carbon::createFromFormat('d/m/Y H:i:s', $date_to_parsed . '23:59:59');
 
         // get facturas
-        $facturas = Factura::whereBetween('fecha_emision', [$date_from, $date_to]);
+        $facturas = Factura::whereNull('deleted_at')->whereBetween('fecha_emision', [$date_from, $date_to]);
 
         if ($request->user_id != '') {
             $facturas = $facturas->where('user_id', $request->user_id);
@@ -2825,9 +3055,19 @@ class BillController extends Controller
                         if (isset($afipResponse['CAE']) && !empty($afipResponse['CAE'])) {
                             $factura->cae = $afipResponse['CAE'];
                             try {
-                                $factura->cae_vto = isset($afipResponse['CAEFchVto']) ? Carbon::createFromFormat('Ymd', $afipResponse['CAEFchVto']) : null;
+                                if (isset($afipResponse['CAEFchVto'])) {
+                                    $caeVto = $afipResponse['CAEFchVto'];
+                                    // AFIP puede devolver en formato Ymd (20260121) o Y-m-d (2026-01-23)
+                                    if (strlen($caeVto) == 8 && is_numeric($caeVto)) {
+                                        $factura->cae_vto = Carbon::createFromFormat('Ymd', $caeVto);
+                                    } else {
+                                        $factura->cae_vto = Carbon::parse($caeVto);
+                                    }
+                                } else {
+                                    $factura->cae_vto = null;
+                                }
                             } catch (\Exception $e) {
-                                Log::error('Error parsing CAEFchVto en factura simple: ' . $e->getMessage());
+                                Log::error('Error parsing CAEFchVto en factura simple: ' . $e->getMessage(), ['cae_vto' => $afipResponse['CAEFchVto'] ?? 'N/A']);
                                 $factura->cae_vto = null;
                             }
                             $factura->save();
@@ -3535,5 +3775,459 @@ class BillController extends Controller
         } catch (Exception $e) {
             return response()->json(['error' => 'Error al rechazar el pago: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Mostrar formulario de confirmación para anular un período completo
+     */
+    public function cancelPeriod($mes, $ano)
+    {
+        $periodo = $mes . '/' . $ano;
+        
+        // Obtener facturas del período (solo activas)
+        $facturas = Factura::where('periodo', $periodo)->whereNull('deleted_at')->get();
+        
+        if ($facturas->isEmpty()) {
+            return redirect('/admin/period')->with([
+                'status' => 'danger',
+                'icon' => 'fa-times-circle',
+                'message' => 'No se encontraron facturas activas para el período ' . $periodo
+            ]);
+        }
+
+        // Calcular estadísticas del período
+        $stats = [
+            'total_facturas' => $facturas->count(),
+            'facturas_pagadas' => $facturas->where('importe_pago', '>', 0)->count(),
+            'facturas_enviadas' => $facturas->whereNotNull('mail_date')->count(),
+            'facturas_con_cae' => $facturas->whereNotNull('cae')->count(),
+            'importe_total' => $facturas->sum('importe_total'),
+        ];
+
+        return View::make('period.cancel_periodo')->with([
+            'periodo' => $periodo,
+            'mes' => $mes,
+            'ano' => $ano,
+            'stats' => $stats
+        ]);
+    }
+
+    /**
+     * Procesar la anulación de un período completo
+     */
+    public function cancelPeriodPost(Request $request, $mes, $ano)
+    {
+
+        $periodo = $mes . '/' . $ano;
+        $userId = Auth::id();
+        
+        // SIN TRANSACCIÓN - Cada NC y anulación se guarda inmediatamente
+        
+        try {
+            // Obtener todas las facturas del período (solo no anuladas)
+            $facturas = Factura::where('periodo', $periodo)->whereNull('deleted_at')->get();
+            
+            if ($facturas->isEmpty()) {
+                return redirect('/admin/period')->with([
+                    'status' => 'danger',
+                    'icon' => 'fa-times-circle',
+                    'message' => 'No se encontraron facturas activas para el período ' . $periodo
+                ]);
+            }
+
+            $contadores = [
+                'facturas_anuladas' => 0,
+                'notas_credito_emitidas' => 0,
+                'notas_credito_fallidas' => 0,
+                'saldos_favor_creados' => 0,
+                'errores' => []
+            ];
+
+            foreach ($facturas as $factura) {
+                try {
+                    $factura->talonario; // Cargar relación
+                    $factura->cliente; // Cargar cliente
+                    
+                    // Verificar si la factura estaba pagada
+                    $estabaPagada = !empty($factura->fecha_pago) && !empty($factura->importe_pago);
+                    
+                    // **NO EMITIR NC EN AFIP SI LA FACTURA YA ESTABA PAGADA**
+                    // Esto mantiene las facturas en los períodos fiscales donde ingresó el dinero
+                    $debeEmitirNC = !$estabaPagada;
+                    
+                    Log::info('Verificación emisión NC', [
+                        'factura_id' => $factura->id,
+                        'estaba_pagada' => $estabaPagada,
+                        'debe_emitir_nc' => $debeEmitirNC,
+                        'fecha_pago' => $factura->fecha_pago,
+                        'forma_pago' => $factura->forma_pago
+                    ]);
+                    
+                    // Determinar tipo de comprobante según letra del talonario
+                    $cbteTipo = $factura->talonario->letra == 'A' ? 3 : 8; // 3=NC A, 8=NC B
+                    $ptoVta = $factura->talonario->nro_punto_vta;
+                    
+                    // Emitir Nota de Crédito en AFIP SOLO SI LA FACTURA NO ESTABA PAGADA
+                    if ($debeEmitirNC) {
+                        try {
+                        if ($factura->talonario->letra == 'A') {
+                            // Nota de Crédito A
+                            $afipResponse = $this->afipService->notaCreditoA(
+                                $ptoVta,
+                                $factura->cliente->dni,
+                                $factura->importe_total,
+                                $factura->nro_factura
+                            );
+                        } else {
+                            // Nota de Crédito B
+                            $afipResponse = $this->afipService->notaCreditoB(
+                                $ptoVta,
+                                $factura->importe_total,
+                                $factura->nro_factura
+                            );
+                        }
+
+                        Log::info('AFIP - Respuesta NC para anulación de período', [
+                            'factura_id' => $factura->id,
+                            'periodo' => $periodo,
+                            'response' => $afipResponse
+                        ]);
+
+                        // Verificar respuesta de AFIP
+                        if (isset($afipResponse['CAE']) && !empty($afipResponse['CAE'])) {
+                            // Crear registro de Nota de Crédito
+                            $notaCredito = new NotaCredito();
+                            $notaCredito->factura_id = $factura->id;
+                            $notaCredito->talonario_id = $factura->talonario_id;
+                            // Usar CbteDesde si existe, sino CbteHasta, sino null
+                            $notaCredito->nro_nota_credito = $afipResponse['CbteDesde'] ?? ($afipResponse['CbteHasta'] ?? null);
+                            // nro_cliente es INTEGER, extraer solo números si es alfanumérico
+                            $notaCredito->nro_cliente = is_numeric($factura->nro_cliente) 
+                                ? $factura->nro_cliente 
+                                : (int) preg_replace('/[^0-9]/', '', $factura->nro_cliente);
+                            $notaCredito->periodo = $factura->periodo;
+                            $notaCredito->fecha_emision = Carbon::now();
+                            $notaCredito->motivo = 'ANULACIÓN DE PERÍODO ' . $periodo . ' - Generado por: ' . Auth::user()->name;
+                            
+                            // Importes de la nota de crédito
+                            $notaCredito->importe_bonificacion = $factura->importe_subtotal;
+                            $notaCredito->importe_iva = $factura->importe_subtotal_iva ?? ($factura->importe_total - $factura->importe_subtotal);
+                            $notaCredito->importe_total = $factura->importe_total;
+                            
+                            // Datos de AFIP
+                            $notaCredito->cae = $afipResponse['CAE'];
+                            
+                            try {
+                                if (isset($afipResponse['CAEFchVto'])) {
+                                    $caeVto = $afipResponse['CAEFchVto'];
+                                    // AFIP puede devolver en formato Ymd (20260121) o Y-m-d (2026-01-21)
+                                    if (strlen($caeVto) == 8 && is_numeric($caeVto)) {
+                                        // Formato Ymd
+                                        $notaCredito->cae_vto = Carbon::createFromFormat('Ymd', $caeVto);
+                                    } else {
+                                        // Formato Y-m-d u otro formato con guiones/barras
+                                        $notaCredito->cae_vto = Carbon::parse($caeVto);
+                                    }
+                                } else {
+                                    $notaCredito->cae_vto = null;
+                                }
+                            } catch (\Exception $e) {
+                                Log::error('Error parsing CAEFchVto: ' . $e->getMessage(), ['cae_vto' => $afipResponse['CAEFchVto'] ?? 'N/A']);
+                                $notaCredito->cae_vto = null;
+                            }
+                            
+                            $notaCredito->save();
+                            $contadores['notas_credito_emitidas']++;
+                            
+                            Log::info('NC creada exitosamente', [
+                                'nc_id' => $notaCredito->id,
+                                'nro_nc' => $notaCredito->nro_nota_credito,
+                                'cae' => $notaCredito->cae
+                            ]);
+                            
+                        } else {
+                            // AFIP no devolvió CAE
+                            $errorMsg = 'AFIP no devolvió CAE para factura ' . $factura->nro_factura;
+                            if (isset($afipResponse['Observaciones'])) {
+                                $errorMsg .= ': ' . print_r($afipResponse['Observaciones'], true);
+                            }
+                            $contadores['errores'][] = $errorMsg;
+                            $contadores['notas_credito_fallidas']++;
+                            Log::error($errorMsg, ['afip_response' => $afipResponse]);
+                            continue; // No anular la factura si falla la NC
+                        }
+
+                    } catch (Exception $afipException) {
+                        $errorMsg = 'Error AFIP en factura ' . $factura->nro_factura . ': ' . $afipException->getMessage();
+                        $contadores['errores'][] = $errorMsg;
+                        $contadores['notas_credito_fallidas']++;
+                        Log::error($errorMsg);
+                        continue; // No anular la factura si falla la NC
+                    }
+                    } else {
+                        // Factura estaba pagada - No se emite NC en AFIP
+                        Log::info('NC NO emitida en AFIP - Factura ya estaba pagada', [
+                            'factura_id' => $factura->id,
+                            'nro_factura' => $factura->nro_factura,
+                            'fecha_pago' => $factura->fecha_pago,
+                            'forma_pago' => $factura->forma_pago,
+                            'importe_pago' => $factura->importe_pago
+                        ]);
+                    }
+                    
+
+                    // Si llegamos aquí, la NC se emitió correctamente
+                    // Si la factura estaba pagada, crear registro de saldo a favor
+                    if ($estabaPagada && $factura->importe_pago > 0) {
+                        try {
+                            $saldoFavor = new SaldoFavor();
+                            $saldoFavor->user_id = $factura->user_id;
+                            $saldoFavor->factura_anulada_id = $factura->id;
+                            $saldoFavor->nota_credito_id = $notaCredito->id ?? null;
+                            $saldoFavor->periodo = $factura->periodo;
+                            $saldoFavor->importe_pagado = $factura->importe_pago;
+                            $saldoFavor->importe_utilizado = 0;
+                            $saldoFavor->importe_disponible = $factura->importe_pago;
+                            $saldoFavor->estado = 'pendiente';
+                            $saldoFavor->observaciones = 'Saldo a favor generado por anulación de período ' . $periodo . 
+                                                         ' - Factura #' . $factura->nro_factura . 
+                                                         ' pagada el ' . Carbon::parse($factura->fecha_pago)->format('d/m/Y');
+                            $saldoFavor->save();
+                            
+                            $contadores['saldos_favor_creados']++;
+                            
+                            Log::info('Saldo a favor creado', [
+                                'saldo_id' => $saldoFavor->id,
+                                'user_id' => $factura->user_id,
+                                'importe' => $factura->importe_pago,
+                                'factura_anulada' => $factura->id
+                            ]);
+                        } catch (Exception $saldoException) {
+                            Log::error('Error al crear saldo a favor para factura ' . $factura->id . ': ' . $saldoException->getMessage());
+                            // Continuar aunque falle el saldo a favor
+                        }
+                    }
+                    
+                    // Realizar soft delete de la factura
+                    $factura->motivo_anulacion = 'ANULACIÓN MASIVA DE PERÍODO ' . $periodo;
+                    $factura->anulado_por = $userId;
+                    $factura->fecha_anulacion = Carbon::now();
+                    $factura->save();
+                    $factura->delete(); // Soft delete
+                    
+                    $contadores['facturas_anuladas']++;
+
+                } catch (Exception $e) {
+                    $contadores['errores'][] = 'Factura #' . $factura->id . ': ' . $e->getMessage();
+                    Log::error('Error procesando factura ' . $factura->id . ': ' . $e->getMessage());
+                }
+            }
+
+            // Todo se guardó inmediatamente - no hay commit necesario
+
+            $mensaje = "Período {$periodo} procesado. ";
+            $mensaje .= "Facturas anuladas: {$contadores['facturas_anuladas']}. ";
+            $mensaje .= "NC emitidas en AFIP: {$contadores['notas_credito_emitidas']}. ";
+            
+            if ($contadores['saldos_favor_creados'] > 0) {
+                $mensaje .= "Saldos a favor creados: {$contadores['saldos_favor_creados']}. ";
+            }
+            
+            if ($contadores['notas_credito_fallidas'] > 0) {
+                $mensaje .= "NC fallidas: {$contadores['notas_credito_fallidas']}. ";
+            }
+            
+            if (!empty($contadores['errores'])) {
+                $mensaje .= " Errores: " . implode(' | ', array_slice($contadores['errores'], 0, 3));
+                if (count($contadores['errores']) > 3) {
+                    $mensaje .= ' (y ' . (count($contadores['errores']) - 3) . ' más)';
+                }
+            }
+
+            $status = $contadores['notas_credito_fallidas'] > 0 ? 'warning' : 'success';
+            $icon = $contadores['notas_credito_fallidas'] > 0 ? 'fa-exclamation-triangle' : 'fa-check-circle';
+
+            return redirect('/admin/period')->with([
+                'status' => $status,
+                'icon' => $icon,
+                'message' => $mensaje
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('Error en cancelPeriodPost: ' . $e->getMessage());
+            
+            return redirect()->back()->with([
+                'status' => 'danger',
+                'icon' => 'fa-times-circle',
+                'message' => 'Error al anular el período: ' . $e->getMessage()
+            ]);
+        }
+    }
+
+    /**
+     * Obtener saldos a favor disponibles de un cliente para un período
+     * 
+     * @param int $userId ID del usuario/cliente
+     * @param string $periodo Período en formato MM/YYYY (opcional, si se especifica solo busca saldos de ese período)
+     * @return Collection Colección de saldos a favor disponibles
+     */
+    public function getSaldosFavorCliente($userId, $periodo = null)
+    {
+        $query = SaldoFavor::where('user_id', $userId)
+            ->where('importe_disponible', '>', 0)
+            ->whereIn('estado', ['pendiente', 'parcial'])
+            ->orderBy('created_at', 'asc'); // FIFO: primero los más antiguos
+        
+        if ($periodo) {
+            $query->where('periodo', $periodo);
+        }
+        
+        return $query->get();
+    }
+
+    /**
+     * Calcular el total de saldo a favor disponible de un cliente
+     * 
+     * @param int $userId ID del usuario/cliente
+     * @param string $periodo Período en formato MM/YYYY (opcional)
+     * @return float Total de saldo disponible
+     */
+    public function getTotalSaldoFavorCliente($userId, $periodo = null)
+    {
+        $query = SaldoFavor::where('user_id', $userId)
+            ->where('importe_disponible', '>', 0)
+            ->whereIn('estado', ['pendiente', 'parcial']);
+        
+        if ($periodo) {
+            $query->where('periodo', $periodo);
+        }
+        
+        // DEBUG: Log de la consulta
+        $sql = $query->toSql();
+        $bindings = $query->getBindings();
+        Log::info('DEBUG getTotalSaldoFavorCliente - SQL', [
+            'sql' => $sql,
+            'bindings' => $bindings,
+            'user_id' => $userId,
+            'periodo' => $periodo
+        ]);
+        
+        $saldos = $query->get();
+        Log::info('DEBUG getTotalSaldoFavorCliente - Registros', [
+            'count' => $saldos->count(),
+            'saldos' => $saldos->map(function($s) {
+                return [
+                    'id' => $s->id,
+                    'periodo' => $s->periodo,
+                    'importe_disponible' => $s->importe_disponible,
+                    'tipo' => gettype($s->importe_disponible)
+                ];
+            })->toArray()
+        ]);
+        
+        $total = $saldos->sum('importe_disponible');
+        Log::info('DEBUG getTotalSaldoFavorCliente - Total', [
+            'total' => $total,
+            'tipo' => gettype($total)
+        ]);
+        
+        return $total;
+    }
+
+    /**
+     * Aplicar saldo a favor a una factura nueva
+     * Esto se debe llamar al generar una nueva factura para un cliente que tiene saldo
+     * IMPORTANTE: Solo aplica saldos del mismo período que la factura
+     * 
+     * @param int $userId ID del usuario/cliente
+     * @param int $facturaId ID de la nueva factura
+     * @param float $importeFactura Importe total de la factura
+     * @param string $periodo Período en formato MM/YYYY
+     * @return array ['importe_descontado' => float, 'saldos_aplicados' => array]
+     */
+    public function aplicarSaldoFavorAFactura($userId, $facturaId, $importeFactura, $periodo)
+    {
+        // Solo obtener saldos del mismo período
+        $saldos = $this->getSaldosFavorCliente($userId, $periodo);
+        
+        Log::info('DEBUG aplicarSaldoFavorAFactura - Saldos obtenidos', [
+            'user_id' => $userId,
+            'periodo' => $periodo,
+            'count' => $saldos->count(),
+            'saldos' => $saldos->map(function($s) {
+                return [
+                    'id' => $s->id,
+                    'importe_disponible' => $s->importe_disponible,
+                    'estado' => $s->estado
+                ];
+            })->toArray()
+        ]);
+        
+        $importeRestante = $importeFactura;
+        $importeDescontado = 0;
+        $saldosAplicados = [];
+
+        foreach ($saldos as $saldo) {
+            Log::info('DEBUG aplicarSaldoFavorAFactura - Procesando saldo', [
+                'saldo_id' => $saldo->id,
+                'importe_disponible' => $saldo->importe_disponible,
+                'importe_restante' => $importeRestante
+            ]);
+            
+            if ($importeRestante <= 0) {
+                Log::info('DEBUG aplicarSaldoFavorAFactura - Importe restante es 0, saliendo del loop');
+                break;
+            }
+
+            $importeAAplicar = min($saldo->importe_disponible, $importeRestante);
+            
+            Log::info('DEBUG aplicarSaldoFavorAFactura - Antes de aplicar', [
+                'importe_a_aplicar' => $importeAAplicar,
+                'tiene_metodo_aplicarSaldo' => method_exists($saldo, 'aplicarSaldo')
+            ]);
+            
+            $saldo->aplicarSaldo($importeAAplicar, $facturaId);
+            
+            $importeRestante -= $importeAAplicar;
+            $importeDescontado += $importeAAplicar;
+            
+            $saldosAplicados[] = [
+                'saldo_id' => $saldo->id,
+                'importe_aplicado' => $importeAAplicar,
+                'factura_anulada_original' => $saldo->factura_anulada_id
+            ];
+
+            Log::info('Saldo a favor aplicado', [
+                'saldo_id' => $saldo->id,
+                'factura_nueva_id' => $facturaId,
+                'importe_aplicado' => $importeAAplicar,
+                'saldo_restante' => $saldo->importe_disponible
+            ]);
+        }
+
+        return [
+            'importe_descontado' => $importeDescontado,
+            'saldos_aplicados' => $saldosAplicados
+        ];
+    }
+
+    /**
+     * Crear bonificación puntual por saldo a favor en una factura
+     * Esto se llama después de generar la factura para aplicar el descuento
+     * 
+     * @param int $facturaId ID de la factura
+     * @param float $importe Importe del saldo a favor a aplicar
+     * @param string $descripcion Descripción de la bonificación
+     * @return BonificacionPuntual
+     */
+    public function crearBonificacionPorSaldoFavor($facturaId, $importe, $descripcion = null)
+    {
+        $bonificacion = new BonificacionPuntual();
+        $bonificacion->factura_id = $facturaId;
+        $bonificacion->importe = $importe;
+        $bonificacion->descripcion = $descripcion ?? 'Saldo a favor por período anulado';
+        $bonificacion->save();
+
+        return $bonificacion;
     }
 }

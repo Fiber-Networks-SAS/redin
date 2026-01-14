@@ -3,6 +3,7 @@
 namespace App;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Contracts\Encryption\DecryptException;
 
 // laravel-auditing
@@ -13,6 +14,7 @@ class Factura extends Model implements AuditableContract
 {
 
     use Auditable;
+    use SoftDeletes;
     
 	// define la tabla a utilizar
 	protected $table = 'facturas';
@@ -20,7 +22,13 @@ class Factura extends Model implements AuditableContract
 	protected $fillable = [
         'cae',
         'cae_vto',
+        'motivo_anulacion',
+        'anulado_por',
+        'fecha_anulacion',
     ];
+    
+    // campos de fecha para SoftDeletes
+    protected $dates = ['deleted_at', 'cae_vto', 'fecha_anulacion'];
     //agregar casteos
     protected $casts = [
         'importe_total' => 'float',
@@ -82,6 +90,16 @@ class Factura extends Model implements AuditableContract
         return $this->hasMany('App\BonificacionPuntual', 'factura_id');
     }
 
+    public function saldosFavorGenerados()
+    {
+        return $this->hasMany('App\SaldoFavor', 'factura_anulada_id');
+    }
+
+    public function saldosFavorAplicados()
+    {
+        return $this->hasMany('App\SaldoFavor', 'factura_nueva_id');
+    }
+
     public function pagosInformados()
     {
         return $this->hasMany('App\PagoInformado', 'factura_id');
@@ -123,5 +141,39 @@ class Factura extends Model implements AuditableContract
     public function getImporteOriginalAttribute()
     {
         return $this->importe_subtotal + $this->importe_subtotal_iva;
+    }
+
+    /**
+     * Obtener el total de bonificaciones puntuales aplicadas
+     */
+    public function getTotalBonificacionesPuntuales()
+    {
+        return $this->bonificacionesPuntuales()->sum('importe');
+    }
+
+    /**
+     * Verificar si la factura tiene saldos a favor aplicados
+     */
+    public function tieneSaldosFavorAplicados()
+    {
+        return $this->saldosFavorAplicados()->exists();
+    }
+
+    /**
+     * Obtener descripción de saldos aplicados
+     */
+    public function getDescripcionSaldosAplicados()
+    {
+        $saldos = $this->saldosFavorAplicados()->get();
+        if ($saldos->isEmpty()) {
+            return null;
+        }
+
+        $descripciones = [];
+        foreach ($saldos as $saldo) {
+            $descripciones[] = "Saldo de período {$saldo->periodo}: $" . number_format($saldo->importe_utilizado, 2);
+        }
+        
+        return implode(', ', $descripciones);
     }
 }

@@ -440,10 +440,10 @@
                         {{-- Normal --}}
                 <tr>
                     <td class="left">{{ $fila_detalle }}</td>
-                    <td class="right">{{ safe_number_format($importe_neto) }}</td>
+                    <td class="right">${{ safe_number_format($importe_neto) }}</td>
                     <td class="right">21%</td>
-                    <td class="right">{{ safe_number_format($importe_iva) }}</td>
-                    <td class="right">{{ safe_number_format($fila_importe) }}</td>
+                    <td class="right">${{ safe_number_format($importe_iva) }}</td>
+                    <td class="right">${{ safe_number_format($fila_importe) }}</td>
                 </tr>
                 {{-- bonificacion --}}
                 <?php if ($detalle->bonificacion_detalle != null && $detalle->importe_bonificacion > 0): ?>
@@ -454,10 +454,10 @@
                 ?>
                 <tr>
                     <td class="left">Bonificacion: {{ $detalle->bonificacion_detalle }}</td>
-                    <td class="right">-{{ safe_number_format($bonif_neto) }}</td>
+                    <td class="right">-${{ safe_number_format($bonif_neto) }}</td>
                     <td class="right">21%</td>
-                    <td class="right">-{{ safe_number_format($bonif_iva) }}</td>
-                    <td class="right">-{{ safe_number_format($detalle->importe_bonificacion) }}</td>
+                    <td class="right">-${{ safe_number_format($bonif_iva) }}</td>
+                    <td class="right">-${{ safe_number_format($detalle->importe_bonificacion) }}</td>
                 </tr>
                 <?php endif; ?>
                 {{-- Instalación --}}
@@ -465,10 +465,10 @@
                 <tr>
                     <td class="left"> *Costo de Instalación (Cuota
                         {{ $detalle->instalacion_cuota . '/' . $detalle->instalacion_plan_pago }})</td>
-                    <td class="right">{{ safe_number_format(clean_number($detalle->costo_instalacion) * 0.79) }}</td>
+                    <td class="right">${{ safe_number_format(clean_number($detalle->costo_instalacion) * 0.79) }}</td>
                     <td class="right">21%</td>
-                    <td class="right">{{ safe_number_format(clean_number($detalle->costo_instalacion) * 0.21) }}</td>
-                    <td class="right">{{ safe_number_format($detalle->costo_instalacion) }}</td>
+                    <td class="right">${{ safe_number_format(clean_number($detalle->costo_instalacion) * 0.21) }}</td>
+                    <td class="right">${{ safe_number_format($detalle->costo_instalacion) }}</td>
                 </tr>
                 <?php endif; ?>
 
@@ -485,10 +485,10 @@
                         <td class="detalle_row" colspan="5">
                     <tr>
                         <td class="left">Bonificación: {{ $bonificacion->descripcion }}</td>
-                        <td class="right">-{{ safe_number_format($bonificacion->importe * 0.79) }}</td>
+                        <td class="right">-${{ safe_number_format($bonificacion->importe * 0.79) }}</td>
                         <td class="right">21%</td>
-                        <td class="right">-{{ safe_number_format($bonificacion->importe * 0.21) }}</td>
-                        <td class="right">-{{ safe_number_format($bonificacion->importe) }}</td>
+                        <td class="right">-${{ safe_number_format($bonificacion->importe * 0.21) }}</td>
+                        <td class="right">-${{ safe_number_format($bonificacion->importe) }}</td>
                     </tr>
                     </td>
                     </tr>
@@ -500,21 +500,56 @@
                 <tr>
                     <th style="width: 60%;" class="left">Subtotal</th>
                     <th style="width: 10%;" class="right">
-                        ${{ safe_number_format(clean_number($factura->importe_subtotal) - clean_number($factura->importe_subtotal_iva)) }}
+                        $<?php 
+                        $neto_subtotal = clean_number($factura->importe_subtotal) - clean_number($factura->importe_subtotal_iva);
+                        echo $neto_subtotal < 0 ? '0,00' : safe_number_format($neto_subtotal);
+                        ?>
                     </th>
                     <th style="width: 10%;" class="right"></th>
-                    <th style="width: 10%;" class="right">${{ safe_number_format($factura->importe_subtotal_iva) }}
+                    <th style="width: 10%;" class="right">
+                        $<?php 
+                        $iva_subtotal = clean_number($factura->importe_subtotal_iva);
+                        echo $iva_subtotal < 0 ? '0,00' : safe_number_format($iva_subtotal);
+                        ?>
                     </th>
-                    <th style="width: 10%;" class="right">${{ safe_number_format($factura->importe_subtotal) }}</th>
+                    <th style="width: 10%;" class="right">
+                        $<?php 
+                        $total_subtotal = clean_number($factura->importe_subtotal);
+                        echo $total_subtotal < 0 ? '0,00' : safe_number_format($total_subtotal);
+                        ?>
+                    </th>
                 </tr>
                 <tr>
                     <th style="width: 60%;" class="left">Total</th>
                     <th style="width: 10%;" class="right">
-                        ${{ safe_number_format(clean_number($factura->importe_total) - clean_number($factura->importe_iva)) }}
+                        $<?php 
+                        $total_final = clean_number($factura->importe_total);
+                        if ($total_final == 0) {
+                            echo '0,00';
+                        } else {
+                            $neto_total = clean_number($factura->importe_total) - clean_number($factura->importe_iva);
+                            echo $neto_total < 0 ? '0,00' : safe_number_format($neto_total);
+                        }
+                        ?>
                     </th>
                     <th style="width: 10%;" class="right"></th>
-                    <th style="width: 10%;" class="right">${{ safe_number_format($factura->importe_iva) }}</th>
-                    <th style="width: 10%;" class="right">${{ safe_number_format($factura->importe_total) }}</th>
+                    <th style="width: 10%;" class="right">
+                        $<?php 
+                        $total_final = clean_number($factura->importe_total);
+                        if ($total_final == 0) {
+                            echo '0,00';
+                        } else {
+                            $iva_total = clean_number($factura->importe_iva);
+                            echo $iva_total < 0 ? '0,00' : safe_number_format($iva_total);
+                        }
+                        ?>
+                    </th>
+                    <th style="width: 10%;" class="right">
+                        $<?php 
+                        $total_final = clean_number($factura->importe_total);
+                        echo $total_final < 0 ? '0,00' : safe_number_format($total_final);
+                        ?>
+                    </th>
                 </tr>
             </tfoot>
 
@@ -522,9 +557,11 @@
 
     </div>
 
-
+    
     <div class="footer">
-
+    @if ($factura->importe_total == 0)
+        <p style="color: red; font-weight: bold; text-align: center;">Esta factura contiene una bonificacion que completa el 100% del monto de la misma. Por lo tanto no contiene importe a pagar ni QR de pago. Su emision no genera obligación de pago.</p>
+    @else
         <div style="width: 100%; overflow: hidden;">
             <div style="width: 48%; float: left; margin-right: 3%;">
                 <div class="vencimiento">
@@ -573,7 +610,7 @@
             </div>
             <div style="clear: both;"></div>
         </div>
-
+    @endif
         <div class="info">
             <div class="mensaje">
                 {{-- <h4>Sr. Cliente, a partir de la próxima factura se modifican los días de vencimiento de la siguiente manera:</h4>
@@ -596,6 +633,7 @@
             <p>{{ config('constants.account_info') }}</p>
         </div>
     </div>
+    
 
 
     <!-- Salto de Pagina -->
