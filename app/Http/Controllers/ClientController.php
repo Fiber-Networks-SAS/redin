@@ -521,7 +521,7 @@ class ClientController extends Controller
         $fecha_actual = Carbon::today();
         
         $user = Auth::user();
-        $facturas = Factura::where('user_id', $user->id)->get();
+        $facturas = Factura::withoutGlobalScopes()->where('user_id', $user->id)->get();
 
         foreach ($facturas as $factura) {
 
@@ -1609,7 +1609,7 @@ class ClientController extends Controller
         $clients = [];
         
         // get last periodo facturado
-        $lastFactura = Factura::orderBy('id', 'DESC')->first();
+        $lastFactura = Factura::withoutGlobalScopes()->orderBy('id', 'DESC')->first();
         if (!$lastFactura) {
             return 'null';
         }
@@ -1617,7 +1617,7 @@ class ClientController extends Controller
         $last_periodo = $lastFactura->periodo;
 
         // get all users facturados
-        $users_facturados = Factura::where('periodo', $last_periodo)->get(['user_id']);
+        $users_facturados = Factura::withoutGlobalScopes()->where('periodo', $last_periodo)->get(['user_id']);
         foreach ($users_facturados as $user_facturado) {
             $user_fact[] = $user_facturado->user_id;
         }
@@ -2205,7 +2205,7 @@ class ClientController extends Controller
 
         $fecha_actual = Carbon::today();
         // $periodo = $mes.'/'.$ano;
-        $facturas = Factura::where('user_id', $id)->get();
+        $facturas = Factura::withoutGlobalScopes()->where('user_id', $id)->get();
 
         foreach ($facturas as $factura) {
 
