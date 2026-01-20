@@ -27,7 +27,7 @@ class ConfigPaymentsController extends Controller
     public function create()
     {
         
-        $pagosConfig = PagosConfig::find(1);
+        $pagosConfig = PagosConfig::latest()->first();
         // return $pagosConfig;
 
         return View::make('config_payments.edit')->with(['pagosConfig' => $pagosConfig]);
@@ -52,7 +52,7 @@ class ConfigPaymentsController extends Controller
         //-- VALIDATOR END --//
 
 
-        $pagosConfig = PagosConfig::find(1) ? PagosConfig::find(1) : new PagosConfig;
+        $pagosConfig = PagosConfig::latest()->first() ?? new PagosConfig;
         $pagosConfig->max_cuotas  = $request->max_cuotas;
         $pagosConfig->tasa = $this->floatvalue($request->tasa);
         

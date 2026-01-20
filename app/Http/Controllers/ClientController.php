@@ -2036,7 +2036,13 @@ class ClientController extends Controller
     {
 
         $user   = User::find($id);
-        $pagosConfig = PagosConfig::find(1);
+        $pagosConfig = PagosConfig::latest()->first();
+        
+        // Validar que exista configuración de pagos
+        if (!$pagosConfig) {
+            return back()->with(['status' => 'danger', 'message' => 'Configuración de pagos no encontrada.', 'icon' => 'fa-frown-o']);
+        }
+        
         // return $user;
         
         return View::make('client_admin.create_payment_plan')->with(['user' => $user, 'pagosConfig' => $pagosConfig]);
@@ -2099,7 +2105,7 @@ class ClientController extends Controller
         $cuotas = Cuota::all();
         // return $servicio;
         
-        $pagosConfig = PagosConfig::find(1);
+        $pagosConfig = PagosConfig::latest()->first();
 
         return View::make('client_admin.edit_payment_plan')->with(['user' => $user, 'servicio' => $servicio, 'pagosConfig' => $pagosConfig]);
 
