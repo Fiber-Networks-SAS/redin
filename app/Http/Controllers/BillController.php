@@ -133,7 +133,7 @@ class BillController extends Controller
     {
         $periodos = [];
         // Filtrar solo facturas activas (no anuladas)
-        $facturas = Factura::select(['id', 'periodo', 'fecha_emision', 'fecha_pago', 'nro_cliente', 'importe_total', 'mail_date'])
+        $facturas = Factura::withoutGlobalScopes()->select(['id', 'periodo', 'fecha_emision', 'fecha_pago', 'nro_cliente', 'importe_total', 'mail_date'])
             ->whereNull('deleted_at')
             ->get()
             ->groupBy('periodo');
@@ -967,7 +967,7 @@ class BillController extends Controller
         }
 
         // obtengo el siguiente mes a facturar 
-        $factura    = Factura::whereNull('deleted_at')->orderBy('id', 'desc')->first();
+        $factura    = Factura::withoutGlobalScopes()->whereNull('deleted_at')->orderBy('id', 'desc')->first();
 
         if ($factura && $factura->periodo && preg_match('/^\d{1,2}\/\d{4}$/', $factura->periodo)) {
             try {
@@ -2814,7 +2814,7 @@ class BillController extends Controller
     {
 
         // Obtengo todos los periodos facturados (sin duplicados) ordenados desc
-        $periodos = Factura::orderBy('periodo', 'desc')->pluck('periodo')->unique()->values();
+        $periodos = Factura::withoutGlobalScopes()->orderBy('periodo', 'desc')->pluck('periodo')->unique()->values();
 
         return View::make('bill_single.create')->with(['periodo' => $periodos]);
     }
