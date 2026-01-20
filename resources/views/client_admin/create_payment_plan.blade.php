@@ -111,15 +111,19 @@
                     
                       <select class="form-control" id="pp_plan_pago" name="pp_plan_pago">
 
-                        @for ($i = 1; $i <= $pagosConfig->max_cuotas; $i++)
+                        @if ($pagosConfig && $pagosConfig->max_cuotas)
+                          @for ($i = 1; $i <= $pagosConfig->max_cuotas; $i++)
 
-                          <?php 
-                            $label_text = $i == 1 ? $i . ' Cuota' : $i . ' Cuotas';
-                          ?>
-                          
-                          <option value="{{$i}}" {{ old('pp_plan_pago') == $i ? 'selected' : '' }}>{{$label_text}}</option>
+                            <?php 
+                              $label_text = $i == 1 ? $i . ' Cuota' : $i . ' Cuotas';
+                            ?>
+                            
+                            <option value="{{$i}}" {{ old('pp_plan_pago') == $i ? 'selected' : '' }}>{{$label_text}}</option>
 
-                        @endfor
+                          @endfor
+                        @else
+                          <option value="">No hay configuración de pagos disponible</option>
+                        @endif
 
                       </select>
 
