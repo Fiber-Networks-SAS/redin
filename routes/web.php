@@ -261,6 +261,12 @@ Route::group(['prefix' => 'admin'], function() {
 		Route::post('/period/bill-pay/{id}', 'BillController@getBillPayPost');
 		Route::get('/period/bill-send/{id}', 'BillController@getBillSend');
 		Route::get('/period/download/pmc/{mes}/{ano}', 'BillController@setPeriodoPMC');
+		
+		// generar PDFs del período
+		Route::get('/period/generate-pdf', 'BillController@periodPDFHandler');
+
+		// listar facturas sin PDF del período
+		Route::get('/period/missing-pdfs', 'BillController@listMissingPeriodPDFs');
 
 		// cancelar pago factura
 		Route::get('/period/bill-pay-cancel/{id}', 'BillController@getBillPayCancel');

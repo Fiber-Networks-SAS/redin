@@ -21,6 +21,7 @@ class Kernel extends ConsoleKernel
         Commands\CheckQRCodes::class,
         Commands\SimulateLastPaymentWebhook::class,
         Commands\RegenerateInvoicePDF::class,
+        Commands\GeneratePeriodPDF::class,
     ];
 
     /**

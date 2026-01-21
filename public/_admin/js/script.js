@@ -927,10 +927,10 @@ $(document).ready(function () {
                         }
                         ];
 
-        var columnDefs = [ { orderable: false, "targets": -1 },          // last column
-                           { className: "dt-center", "targets": [1, 2, 3, 4, 6]},
-                           { className: "dt-right", "targets": [5] },
-                           { visible: false, 'targets': [0] }
+                var columnDefs = [ { orderable: false, "targets": -1 },          // last column
+                                                     { className: "dt-center", "targets": [1, 2, 3, 4]},
+                                                     { className: "dt-right", "targets": [5, 6] },
+                                                     { visible: false, 'targets': [0] }
 
                          ];
 

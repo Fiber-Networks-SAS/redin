@@ -521,7 +521,10 @@ class ClientController extends Controller
         $fecha_actual = Carbon::today();
         
         $user = Auth::user();
-        $facturas = Factura::withoutGlobalScopes()->where('user_id', $user->id)->get();
+        $facturas = Factura::withoutGlobalScopes()
+            ->where('user_id', $user->id)
+            ->whereNull('deleted_at')
+            ->get();
 
         foreach ($facturas as $factura) {
 
@@ -1609,7 +1612,10 @@ class ClientController extends Controller
         $clients = [];
         
         // get last periodo facturado
-        $lastFactura = Factura::withoutGlobalScopes()->orderBy('id', 'DESC')->first();
+        $lastFactura = Factura::withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->orderBy('id', 'DESC')
+            ->first();
         if (!$lastFactura) {
             return 'null';
         }
@@ -1617,7 +1623,10 @@ class ClientController extends Controller
         $last_periodo = $lastFactura->periodo;
 
         // get all users facturados
-        $users_facturados = Factura::withoutGlobalScopes()->where('periodo', $last_periodo)->get(['user_id']);
+        $users_facturados = Factura::withoutGlobalScopes()
+            ->where('periodo', $last_periodo)
+            ->whereNull('deleted_at')
+            ->get(['user_id']);
         foreach ($users_facturados as $user_facturado) {
             $user_fact[] = $user_facturado->user_id;
         }
@@ -2205,7 +2214,10 @@ class ClientController extends Controller
 
         $fecha_actual = Carbon::today();
         // $periodo = $mes.'/'.$ano;
-        $facturas = Factura::withoutGlobalScopes()->where('user_id', $id)->get();
+        $facturas = Factura::withoutGlobalScopes()
+            ->where('user_id', $id)
+            ->whereNull('deleted_at')
+            ->get();
 
         foreach ($facturas as $factura) {
 
@@ -2229,9 +2241,13 @@ class ClientController extends Controller
             $factura->primer_vto_fecha = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
             $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
 
-            $factura->importe_subtotal = number_format($factura->importe_subtotal, 2); 
-            $factura->importe_bonificacion = number_format($factura->importe_bonificacion, 2); 
-            $factura->importe_total = number_format($factura->importe_total, 2); 
+            // Enviar importes tal como están en la base (sin number_format), como string
+            $factura->importe_subtotal = (string) $factura->importe_subtotal; 
+            $factura->importe_bonificacion = (string) $factura->importe_bonificacion; 
+            $factura->importe_total = (string) $factura->importe_total; 
+            $factura->importe_pago = is_null($factura->importe_pago)
+                ? '0'
+                : (string) $factura->importe_pago;
 
             $factura->fecha_pago = $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null;
             $factura->forma_pago = $factura->fecha_pago ? $this->forma_pago[$factura->forma_pago] : '';

@@ -2813,8 +2813,13 @@ class BillController extends Controller
     public function billSingle()
     {
 
-        // Obtengo todos los periodos facturados (sin duplicados) ordenados desc
-        $periodos = Factura::withoutGlobalScopes()->orderBy('periodo', 'desc')->pluck('periodo')->unique()->values();
+        // Obtengo todos los periodos facturados (sin duplicados) ordenados desc (excluyendo eliminadas)
+        $periodos = Factura::withoutGlobalScopes()
+            ->whereNull('deleted_at')
+            ->orderBy('periodo', 'desc')
+            ->pluck('periodo')
+            ->unique()
+            ->values();
 
         return View::make('bill_single.create')->with(['periodo' => $periodos]);
     }
@@ -4229,5 +4234,328 @@ class BillController extends Controller
         $bonificacion->save();
 
         return $bonificacion;
+    }
+
+    /**
+     * Mostrar vista para generar PDFs de período
+     * 
+     * @return \Illuminate\View\View
+     */
+    public function generatePeriodPDFView()
+    {
+        return View::make('period.generate_pdf');
+    }
+
+    /**
+     * Handler que detecta si mostrar vista o generar PDFs
+     * Si hay parámetro "periodo", genera los PDFs
+     * Si no hay parámetros, muestra la vista
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|\Illuminate\View\View
+     */
+    /**
+     * Listar facturas del período que carecen de PDF
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse|\Illuminate\View\View
+     */
+    public function listMissingPeriodPDFs(Request $request)
+    {
+        try {
+            // Obtener todos los períodos disponibles
+            $periodos = Factura::whereNull('deleted_at')
+                ->orderBy('periodo', 'desc')
+                ->pluck('periodo')
+                ->unique()
+                ->values()
+                ->toArray();
+
+            if ($request->has('periodo')) {
+                $periodo = $request->query('periodo');
+
+                // Validar formato del período
+                if (!preg_match('/^\d{2}\/\d{4}$/', $periodo)) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => 'Formato de período inválido. Use MM/YYYY (ej: 03/2024)'
+                    ], 400);
+                }
+
+                // Obtener todas las facturas del período
+                $facturas = Factura::with(['talonario', 'cliente'])
+                    ->where('periodo', $periodo)
+                    ->whereNull('deleted_at')
+                    ->orderBy('id', 'asc')
+                    ->get();
+
+                if ($facturas->isEmpty()) {
+                    return response()->json([
+                        'status' => 'error',
+                        'message' => "No se encontraron facturas para el período: {$periodo}"
+                    ], 404);
+                }
+
+                $facturasSinPDF = [];
+                $facturasConPDF = [];
+                $folderFacturas = config('constants.folder_facturas');
+
+                foreach ($facturas as $factura) {
+                    $factura->talonario->nro_punto_vta = $this->zerofill($factura->talonario->nro_punto_vta, 4);
+                    $factura->nro_factura = $this->zerofill($factura->nro_factura);
+                    
+                    $filename = $factura->talonario->nro_punto_vta . '-' . $factura->nro_factura;
+                    $pdfPath = public_path($folderFacturas . 'factura-' . $filename . '.pdf');
+
+                    $facturaInfo = [
+                        'id' => $factura->id,
+                        'numero_factura' => $factura->talonario->letra . ' ' . $factura->talonario->nro_punto_vta . '-' . $factura->nro_factura,
+                        'cliente' => $factura->cliente->firstname . ' ' . $factura->cliente->lastname,
+                        'nro_cliente' => $factura->nro_cliente,
+                        'importe_total' => number_format($factura->importe_total, 2, ',', '.'),
+                        'fecha_emision' => Carbon::parse($factura->fecha_emision)->format('d/m/Y'),
+                        'periodo' => $factura->periodo,
+                        'estado_pago' => $factura->fecha_pago ? 'Pagado' : 'Pendiente'
+                    ];
+
+                    if (file_exists($pdfPath)) {
+                        $facturaInfo['pdf_exists'] = true;
+                        $facturaInfo['pdf_size'] = round(filesize($pdfPath) / 1024, 2); // KB
+                        $facturasConPDF[] = $facturaInfo;
+                    } else {
+                        $facturaInfo['pdf_exists'] = false;
+                        $facturasSinPDF[] = $facturaInfo;
+                    }
+                }
+
+                $response = [
+                    'status' => 'success',
+                    'periodo' => $periodo,
+                    'resumen' => [
+                        'total_facturas' => count($facturas),
+                        'con_pdf' => count($facturasConPDF),
+                        'sin_pdf' => count($facturasSinPDF),
+                        'porcentaje_con_pdf' => count($facturas) > 0 ? round((count($facturasConPDF) / count($facturas)) * 100, 2) : 0
+                    ],
+                    'facturas_sin_pdf' => $facturasSinPDF,
+                    'facturas_con_pdf' => $facturasConPDF
+                ];
+
+                // Si es request JSON, retornar JSON
+                if ($request->wantsJson()) {
+                    return response()->json($response);
+                }
+
+                // Si no, retornar vista HTML
+                return view('period.missing_pdfs', [
+                    'periodo' => $periodo,
+                    'resumen' => $response['resumen'],
+                    'facturasSinPDF' => $facturasSinPDF,
+                    'facturasConPDF' => $facturasConPDF,
+                    'periodos' => $periodos
+                ]);
+            }
+
+            // Si no hay período seleccionado, mostrar forma de selección
+            return view('period.missing_pdfs', [
+                'periodos' => $periodos,
+                'resumen' => null,
+                'facturasSinPDF' => [],
+                'facturasConPDF' => []
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('Error en listMissingPeriodPDFs', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Error al verificar PDFs: ' . $e->getMessage()
+                ], 500);
+            }
+
+            return back()->with([
+                'status' => 'danger',
+                'message' => 'Error al verificar PDFs: ' . $e->getMessage(),
+                'icon' => 'fa-frown-o'
+            ]);
+        }
+    }
+
+    public function periodPDFHandler(Request $request)
+    {
+        // Si hay parámetro periodo, generar PDFs
+        if ($request->has('periodo')) {
+            return $this->generatePeriodPDFViaUrl($request);
+        }
+        
+        // Si no, mostrar vista
+        return $this->generatePeriodPDFView();
+    }
+
+    /**
+     * Generar PDFs de un período a través de una URL
+     * 
+     * Parámetros de query string:
+     * - periodo: Período en formato MM/YYYY (requerido)
+     * - force: 1/0 para forzar regeneración (opcional, default: 0)
+     * - verbose: 1/0 para mostrar información detallada (opcional, default: 0)
+     * 
+     * Ejemplo: /admin/period/generate-pdf?periodo=03/2024&force=1&verbose=1
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function generatePeriodPDFViaUrl(Request $request)
+    {
+        // Obtener parámetros
+        $periodo = $request->query('periodo');
+        $force = (bool) $request->query('force', 0);
+        $verbose = (bool) $request->query('verbose', 0);
+
+        // Validar que el usuario sea admin
+        $user = Auth::user();
+        if (!$user || !$user->hasRole('admin')) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No autorizado. Se requieren permisos de administrador.'
+            ], 403);
+        }
+
+        // Validar que el período esté presente
+        if (!$periodo) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Parámetro requerido: periodo (formato MM/YYYY, ej: 03/2024)'
+            ], 400);
+        }
+
+        // Validar formato del período
+        if (!preg_match('/^\d{2}\/\d{4}$/', $periodo)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Formato de período inválido. Use MM/YYYY (ej: 03/2024)'
+            ], 400);
+        }
+
+        list($mes, $ano) = explode('/', $periodo);
+
+        // Validar mes y año
+        if ((int)$mes < 1 || (int)$mes > 12) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Mes inválido. Debe estar entre 01 y 12'
+            ], 400);
+        }
+
+        if ((int)$ano < 1900 || (int)$ano > 2100) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Año inválido. Debe estar entre 1900 y 2100'
+            ], 400);
+        }
+
+        try {
+            // Verificar que existan facturas para el período
+            $facturasCount = Factura::where('periodo', $periodo)
+                ->whereNull('deleted_at')
+                ->count();
+
+            if ($facturasCount === 0) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "No se encontraron facturas para el período: {$periodo}",
+                    'factura_count' => 0
+                ], 404);
+            }
+
+            // Verificar si el PDF del período ya existe
+            $pdfPath = config('constants.folder_periodos') . 'periodo-' . str_replace('/', '-', $periodo) . '.pdf';
+            $pdfExists = Storage::disk('public')->exists($pdfPath);
+
+            // Si el PDF existe y no se fuerza la regeneración
+            if ($pdfExists && !$force) {
+                return response()->json([
+                    'status' => 'success',
+                    'message' => "El PDF del período ya existe. Use force=1 para regenerar.",
+                    'periodo' => $periodo,
+                    'facturas_count' => $facturasCount,
+                    'pdf_exists' => true,
+                    'pdf_path' => $request->root() . '/' . $pdfPath,
+                    'action' => 'no_generated'
+                ]);
+            }
+
+            // Si se fuerza regeneración y existe, eliminar el anterior
+            if ($pdfExists && $force) {
+                Storage::disk('public')->delete($pdfPath);
+                if ($verbose) {
+                    Log::info("PDF anterior eliminado: {$pdfPath}");
+                }
+            }
+
+            // Generar PDFs de facturas individuales y del período
+            $startTime = microtime(true);
+            
+            $result = $this->setFacturasPeriodoPDF($periodo);
+
+            $endTime = microtime(true);
+            $executionTime = round($endTime - $startTime, 2);
+
+            if ($result) {
+                $response = [
+                    'status' => 'success',
+                    'message' => "PDFs generados exitosamente para el período {$periodo}",
+                    'periodo' => $periodo,
+                    'facturas_count' => $facturasCount,
+                    'pdf_path' => $request->root() . '/' . $pdfPath,
+                    'action' => $force && $pdfExists ? 'regenerated' : 'generated',
+                    'execution_time_seconds' => $executionTime
+                ];
+
+                if ($verbose) {
+                    $fullPath = storage_path('app/public/' . $pdfPath);
+                    if (file_exists($fullPath)) {
+                        $fileSize = File::size($fullPath) / 1024; // Tamaño en KB
+                        $response['file_size_kb'] = round($fileSize, 2);
+                    }
+                    $response['verbose'] = [
+                        'folder_periodos' => config('constants.folder_periodos'),
+                        'disk' => 'public',
+                        'storage_path' => $fullPath ?? 'N/A'
+                    ];
+                }
+
+                return response()->json($response);
+            } else {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "No se pudieron generar los PDFs del período {$periodo}",
+                    'periodo' => $periodo
+                ], 500);
+            }
+
+        } catch (Exception $e) {
+            Log::error('Error en generatePeriodPDFViaUrl', [
+                'periodo' => $periodo,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            $response = [
+                'status' => 'error',
+                'message' => 'Error durante la generación de PDFs: ' . $e->getMessage(),
+                'periodo' => $periodo
+            ];
+
+            if ($verbose) {
+                $response['error_trace'] = $e->getTraceAsString();
+            }
+
+            return response()->json($response, 500);
+        }
     }
 }
