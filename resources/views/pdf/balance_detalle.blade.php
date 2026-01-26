@@ -238,13 +238,14 @@
                     <thead>
 
                         <tr>
-                            <th style="width: 20%;" class="left">Factura</th>
+                            <th style="width: 12%;" class="left">Periodo</th>
+                            <th style="width: 18%;" class="left">Factura</th>
                             <th style="width: 10%;" class="center">Fecha de Emisión</th>
-                            <th style="width: 15%;" class="right">Importe Facturado</th>
+                            <th style="width: 12%;" class="right">Importe Facturado</th>
                             <th style="width: 10%;" class="center">Fecha de Pago</th>
-                            <th style="width: 15%;" class="right">Importe Pagado</th>
-                            <th style="width: 15%;" class="right">Medio de Pago</th>
-                            <th style="width: 15%;" class="right">Importe Adeudado</th>
+                            <th style="width: 12%;" class="right">Importe Pagado</th>
+                            <th style="width: 13%;" class="right">Medio de Pago</th>
+                            <th style="width: 13%;" class="right">Importe Adeudado</th>
                         </tr>
                     </thead>
 
@@ -255,31 +256,32 @@
                                 if ($factura['importe_pago'] != '') {
                                 
                                     $class_tr =  '';
-                                    $importe_pago = $factura['importe_pago'];
+                                    $importe_pago = $factura['importe_pago_numeric'];
                                     $importe_adeudado = 0;
                                 
                                 }else{
                                     
                                     $class_tr =  'debe';
                                     $importe_pago = 0;
-                                    $total_importe_adeudado = (float)$total_importe_adeudado + (float)$factura['importe_total'];
-                                    $importe_adeudado = $factura['importe_total'];
+                                    $total_importe_adeudado = (float)$total_importe_adeudado + (float)$factura['importe_total_numeric'];
+                                    $importe_adeudado = $factura['importe_total_numeric'];
                                 }
 
                                 // totalizo las facturas y los pagos
-                                $total_importe_facturado = (float)$total_importe_facturado + (float)$factura['importe_total'];
+                                $total_importe_facturado = (float)$total_importe_facturado + (float)$factura['importe_total_numeric'];
                                 $total_importe_pagado = (float)$total_importe_pagado + (float)$importe_pago;
 
                                 ?>                        
 
                                 <tr class="<?php echo $class_tr; ?>">
-                                    <td style="width: 20%;" class="left"><?php echo $factura['talonario']['letra'] . ' ' . $factura['talonario']['nro_punto_vta'] . ' - '. $factura['nro_factura']; ?> </a></td>
+                                    <td style="width: 12%;" class="left"><?php echo $factura['periodo']; ?> </td>
+                                    <td style="width: 18%;" class="left"><?php echo $factura['talonario']['letra'] . ' ' . $factura['talonario']['nro_punto_vta'] . ' - '. $factura['nro_factura']; ?> </a></td>
                                     <td style="width: 10%;" class="center"><?php echo $factura['fecha_emision']; ?> </td>
-                                    <td style="width: 15%;" class="right"><?php echo $factura['importe_total']; ?> </td>
+                                    <td style="width: 12%;" class="right"><?php echo isset($factura['importe_total_formatted']) ? $factura['importe_total_formatted'] : number_format((float)$factura['importe_total_numeric'], 2, ',', '.'); ?> </td>
                                     <td style="width: 10%;" class="center"><?php echo $factura['fecha_pago']; ?> </td>
-                                    <td style="width: 15%;" class="right"><?php echo $factura['importe_pago']; ?> </td>
-                                    <td style="width: 15%;" class="right"><?php echo $factura['forma_pago']; ?> </td>
-                                    <td style="width: 15%;" class="right"><?php echo $importe_adeudado > 0 ? number_format((float)$importe_adeudado, 2) : ''; ?> </td>
+                                    <td style="width: 12%;" class="right"><?php echo $factura['importe_pago']; ?> </td>
+                                    <td style="width: 13%;" class="right"><?php echo $factura['forma_pago']; ?> </td>
+                                    <td style="width: 13%;" class="right"><?php echo $importe_adeudado > 0 ? number_format((float)$importe_adeudado, 2, ',', '.') : ''; ?> </td>
                                 </tr>
 
                         <?php endforeach; ?>
@@ -289,9 +291,9 @@
                     <tfoot>
                         <tr>
                             <th colspan="1"><b>Total</b></td>
-                            <th colspan="2" class="right"><?php echo number_format((float)$total_importe_facturado, 2); ?></td>
-                            <th colspan="2" class="right"><?php echo number_format((float)$total_importe_pagado, 2); ?></td>
-                            <th colspan="2" class="right"><?php echo number_format((float)$total_importe_adeudado, 2); ?></td>                            
+                            <th colspan="2" class="right"><?php echo number_format((float)$total_importe_facturado, 2, ',', '.'); ?></td>
+                            <th colspan="2" class="right"><?php echo number_format((float)$total_importe_pagado, 2, ',', '.'); ?></td>
+                            <th colspan="2" class="right"><?php echo number_format((float)$total_importe_adeudado, 2, ',', '.'); ?></td>                            
                         </tr>
                     </tfoot>       
                             
