@@ -3453,11 +3453,11 @@ class BillController extends Controller
             }
 
             // Limitar cantidad para evitar timeouts
-            if (count($facturaIds) > 100) {
+            if (count($facturaIds) > 200) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Demasiadas facturas solicitadas.',
-                    'error' => 'Máximo 100 facturas por request. Total solicitadas: ' . count($facturaIds)
+                    'error' => 'Máximo 200 facturas por request. Total solicitadas: ' . count($facturaIds)
                 ], 400);
             }
 
@@ -3601,12 +3601,17 @@ class BillController extends Controller
                 $detalle->servicio; // Cargar relación servicio
             }
 
-            // Regenerar códigos QR de MercadoPago para cada vencimiento
-            try {
-                $this->generatePaymentQRCodes($factura);
-            } catch (Exception $e) {
-                // Log del error pero continuar con la generación del PDF
-                Log::warning("Error generando códigos QR para factura ID: {$id}. Error: " . $e->getMessage());
+            // Regenerar códigos QR de MercadoPago SOLO si la factura NO está pagada
+            if (empty($factura->fecha_pago)) {
+                try {
+                    $this->generatePaymentQRCodes($factura);
+                    Log::info("Códigos QR generados para factura ID: {$id} (factura impaga)");
+                } catch (Exception $e) {
+                    // Log del error pero continuar con la generación del PDF
+                    Log::warning("Error generando códigos QR para factura ID: {$id}. Error: " . $e->getMessage());
+                }
+            } else {
+                Log::info("Códigos QR NO generados para factura ID: {$id} (factura ya pagada el " . Carbon::parse($factura->fecha_pago)->format('d/m/Y') . ")");
             }
 
             // Crear y guardar el PDF
