@@ -2179,20 +2179,20 @@ function getBalanceDetalleScreen() {
                                 
                                 $.each( users, function( key, factura) {
 
-                                    if (factura.importe_pago != '') {
-                                    
-                                        class_tr =  '';
-                                        importe_pago = factura.importe_pago;
-                                        importe_adeudado = '';
-                                    
-                                    }else{
-                                        
-                                        class_tr =  'debe';
-                                        importe_pago = 0;
-                                        total_importe_adeudado = parseFloat(total_importe_adeudado) + parseFloat(factura.importe_total);
-                                        importe_adeudado = factura.importe_total;
-
-                                    }
+                                        if (factura.is_nota_credito) {
+                                            class_tr = '';
+                                            importe_pago = '';
+                                            importe_adeudado = '';
+                                        } else if (factura.importe_pago != '') {
+                                            class_tr =  '';
+                                            importe_pago = factura.importe_pago;
+                                            importe_adeudado = '';
+                                        } else {
+                                            class_tr =  'debe';
+                                            importe_pago = 0;
+                                            total_importe_adeudado = parseFloat(total_importe_adeudado) + parseFloat(factura.importe_total);
+                                            importe_adeudado = factura.importe_total;
+                                        }
 
                                     // totalizo las facturas y los pagos
                                     total_importe_facturado = parseFloat(total_importe_facturado) + parseFloat(factura.importe_total);
@@ -2201,7 +2201,11 @@ function getBalanceDetalleScreen() {
                                     // compongo el cuerpo de la tabla
                                     result += '<tr class="'+class_tr+'"">';
                                         result += '<td class="center">'+factura.periodo+'</td>';
-                                        result += '<td><a href="/admin/period/bill/' + factura.id + '" target="_blank">'+factura.talonario.letra + ' ' + factura.talonario.nro_punto_vta + ' - '+ factura.nro_factura+'</a></td>';
+                                        if (factura.is_nota_credito) {
+                                            result += '<td>' + 'Nota de Crédito: ' + factura.talonario.letra + ' ' + factura.talonario.nro_punto_vta + ' - ' + factura.nro_factura + '</td>';
+                                        } else {
+                                            result += '<td><a href="/admin/period/bill/' + factura.id + '" target="_blank">'+factura.talonario.letra + ' ' + factura.talonario.nro_punto_vta + ' - '+ factura.nro_factura+'</a></td>';
+                                        }
                                         result += '<td class="center">'+factura.fecha_emision+'</td>';
                                         result += '<td class="right">'+factura.importe_total+'</td>';
                                         result += '<td class="center">'+factura.fecha_pago+'</td>';

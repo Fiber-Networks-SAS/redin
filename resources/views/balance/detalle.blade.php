@@ -67,6 +67,8 @@
                     @if ($errors->has('periodo_to')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('periodo_to') }}</li></ul> @endif
                   </div>
                 </div>
+                
+                <!-- Opciones: Se decidió no incluir facturas anuladas; las Notas de Crédito se muestran junto a su factura cuando existen -->
 
                 <div class="ln_solid"></div>
                 <div class="form-group">

@@ -1,7 +1,6 @@
 <?php
 
 
-
 namespace App\Http\Controllers;
 
 
@@ -2739,14 +2738,12 @@ class BillController extends Controller
 
                             } else {
 
+                                // Usar CUIT si está presente, sino DNI
                                 $afipResponse = $this->afipService->facturaB(
-
                                     $talonario->nro_punto_vta,
-
+                                    $item['cliente']->dni,
                                     $factura->importe_total
-
                                 );
-
                             }
 
                         
@@ -4033,18 +4030,23 @@ class BillController extends Controller
 
 
 
-            // nro factura 
+            // get facturas
+            $include_annuladas = $request->has('include_annuladas') && $request->include_annuladas;
 
-            $nro_factura = str_pad($factura->nro_factura, 20, '0', STR_PAD_LEFT);
+            if ($include_annuladas) {
+                // incluir facturas soft deleted (anuladas)
+                $facturasQuery = Factura::withTrashed()->whereBetween('fecha_emision', [$date_from, $date_to]);
+            } else {
+                $facturasQuery = Factura::whereNull('deleted_at')->whereBetween('fecha_emision', [$date_from, $date_to]);
+            }
 
+            if ($request->user_id != '') {
+                $facturasQuery = $facturasQuery->where('user_id', $request->user_id);
+            }
 
-
-            // fecha de vencimiento
-
-            $dt = Carbon::parse($factura->primer_vto_fecha);
-
-            $primer_vto_fecha = $dt->year . str_pad($dt->month, 2, '0', STR_PAD_LEFT)  . str_pad($dt->day, 2, '0', STR_PAD_LEFT);
-
+            $facturas = $facturasQuery->orderBy('user_id', 'ASC')
+                ->orderBy('id', 'DESC')
+                ->get();
 
 
             // format importes
@@ -5273,8 +5275,54 @@ class BillController extends Controller
 
                 $facturasArray[$factura->nro_cliente][] = $factura;
 
+
+            // Si se solicitó incluir anuladas, anexar Notas de Crédito generadas por facturas anuladas
+            if ($include_annuladas) {
+                $notasQuery = NotaCredito::whereBetween('fecha_emision', [$date_from, $date_to]);
+                if ($request->user_id != '') {
+                    $user = User::find($request->user_id);
+                    if ($user && $user->nro_cliente) {
+                        $notasQuery = $notasQuery->where('nro_cliente', $user->nro_cliente);
+                    }
+                }
+                $notas = $notasQuery->get();
+
+                foreach ($notas as $nota) {
+                    $facturaOrigen = Factura::withTrashed()->find($nota->factura_id);
+                    // solo agregar si la factura origen está anulada (soft deleted)
+                    if (!$facturaOrigen || !$facturaOrigen->deleted_at) continue;
+
+                    $nroCliente = $nota->nro_cliente;
+
+                    $nc = [];
+                    $nc['periodo'] = $nota->periodo;
+                    $nc['talonario'] = $nota->talonario ? $nota->talonario->toArray() : ['letra' => '', 'nro_punto_vta' => ''];
+                    $nc['nro_factura'] = str_pad($nota->nro_nota_credito, 8, '0', STR_PAD_LEFT);
+                    $nc['fecha_emision'] = $nota->fecha_emision ? Carbon::parse($nota->fecha_emision)->format('d/m/Y') : '';
+                    // Las notas de crédito se representan como montos negativos (reducción)
+                    $nc['importe_total_numeric'] = -abs((float)$nota->importe_total);
+                    $nc['importe_total_formatted'] = '-' . number_format((float)$nota->importe_total, 2, ',', '.');
+                    $nc['importe_total'] = '-' . number_format((float)$nota->importe_total, 2, '.', '');
+                    $nc['importe_pago'] = '';
+                    $nc['importe_pago_numeric'] = 0;
+                    $nc['fecha_pago'] = '';
+                    $nc['forma_pago'] = '';
+                    $nc['is_nota_credito'] = true;
+                    $nc['motivo'] = $nota->motivo;
+
+                    if (!isset($facturasArray[$nroCliente]) || empty($facturasArray[$nroCliente])) {
+                        $cliente = Cliente::where('nro_cliente', $nroCliente)->first();
+                        $fake = [];
+                        $fake['cliente'] = ['nombre_apellido' => $cliente ? ($cliente->firstname . ' ' . $cliente->lastname) : 'Cliente Nro. ' . $nroCliente];
+                        $fake['nro_cliente'] = $nroCliente;
+                        $facturasArray[$nroCliente][] = $fake;
+                    }
+
+                    $facturasArray[$nroCliente][] = $nc;
+                }
             }
 
+            return $facturasArray;
 
 
             return $facturasArray;
@@ -6097,14 +6145,11 @@ class BillController extends Controller
 
                         } else {
 
-                            $afipResponse = $this->afipService->facturaB(
-
-                                $talonario->nro_punto_vta,
-
-                                $factura->importe_total
-
-                            );
-
+                                $afipResponse = $this->afipService->facturaB(
+                                    $talonario->nro_punto_vta,
+                                    $item['cliente']->dni,
+                                    $factura->importe_total
+                                );
                         }
 
 

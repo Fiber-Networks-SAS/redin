@@ -188,20 +188,30 @@ class AfipService
     /**
      * Factura B
      */
-    public function facturaB($ptoVta, $importe)
+    /**
+     * Genera Factura B, permitiendo asociar DNI si se provee.
+     * @param int $ptoVta
+     * @param float $importe
+     * @param string|null $dni DNI del cliente (opcional)
+     * @param int $docTipo Tipo de documento (opcional, default 99 Consumidor Final, 96 DNI)
+     */
+    public function facturaB($ptoVta, $importe, $dni = null, $docTipo = null)
     {
         $lastVoucher = $this->getLastVoucher($ptoVta, 6);
         $importeTotal = round($importe, 2);
         $importeNeto = round($importe / 1.21, 2);
         $importeIVA = round($importeTotal - $importeNeto, 2);
         $baseImponibleIVA = round($importeTotal, 2);
+        // Si se provee DNI, usar tipo 96 (DNI) y el número, si no, usar Consumidor Final
+        $docTipoFinal = $docTipo ?? ($dni ? 96 : 99);
+        $docNroFinal = $dni ? intval($dni) : 0;
         $data = [
             'CantReg'   => 1,
             'PtoVta'    => $ptoVta,
             'CbteTipo'  => 6, // Factura B
             'Concepto'  => 2,
-            'DocTipo'   => 99, // Consumidor Final
-            'DocNro'    => 0,
+            'DocTipo'   => $docTipoFinal,
+            'DocNro'    => $docNroFinal,
             'CbteDesde' => $lastVoucher + 1,
             'CbteHasta' => $lastVoucher + 1,
             'CbteFch'   => intval(date('Ymd')),

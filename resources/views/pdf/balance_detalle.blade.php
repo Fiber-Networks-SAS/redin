@@ -253,14 +253,16 @@
                         
                         <?php foreach ($users as $key => $factura): 
 
-                                if ($factura['importe_pago'] != '') {
-                                
+                                // Si es una Nota de Crédito, mostrarla como reducción y no marcar como deuda
+                                if (isset($factura['is_nota_credito']) && $factura['is_nota_credito']) {
+                                    $class_tr = '';
+                                    $importe_pago = 0;
+                                    $importe_adeudado = 0;
+                                } elseif ($factura['importe_pago'] != '') {
                                     $class_tr =  '';
                                     $importe_pago = $factura['importe_pago_numeric'];
                                     $importe_adeudado = 0;
-                                
-                                }else{
-                                    
+                                } else {
                                     $class_tr =  'debe';
                                     $importe_pago = 0;
                                     $total_importe_adeudado = (float)$total_importe_adeudado + (float)$factura['importe_total_numeric'];
@@ -275,7 +277,13 @@
 
                                 <tr class="<?php echo $class_tr; ?>">
                                     <td style="width: 12%;" class="left"><?php echo $factura['periodo']; ?> </td>
-                                    <td style="width: 18%;" class="left"><?php echo $factura['talonario']['letra'] . ' ' . $factura['talonario']['nro_punto_vta'] . ' - '. $factura['nro_factura']; ?> </a></td>
+                                    <td style="width: 18%;" class="left">
+                                        <?php if (isset($factura['is_nota_credito']) && $factura['is_nota_credito']): ?>
+                                            <?php echo 'Nota de Crédito: ' . $factura['talonario']['letra'] . ' ' . $factura['talonario']['nro_punto_vta'] . ' - '. $factura['nro_factura']; ?>
+                                        <?php else: ?>
+                                            <?php echo $factura['talonario']['letra'] . ' ' . $factura['talonario']['nro_punto_vta'] . ' - '. $factura['nro_factura']; ?>
+                                        <?php endif; ?>
+                                    </td>
                                     <td style="width: 10%;" class="center"><?php echo $factura['fecha_emision']; ?> </td>
                                     <td style="width: 12%;" class="right"><?php echo isset($factura['importe_total_formatted']) ? $factura['importe_total_formatted'] : number_format((float)$factura['importe_total_numeric'], 2, ',', '.'); ?> </td>
                                     <td style="width: 10%;" class="center"><?php echo $factura['fecha_pago']; ?> </td>
