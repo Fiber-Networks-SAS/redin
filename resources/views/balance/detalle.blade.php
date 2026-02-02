@@ -37,9 +37,9 @@
               	{{ csrf_field() }}
 
                 <div class="form-group">
-                  <label class="control-label col-md-3 col-sm-3 col-xs-12" for="name">Cliente</label>
+                  <label class="control-label col-md-3 col-sm-3 col-xs-12" for="name">Cliente (DNI/CUIT)</label>
                   <div class="col-md-6 col-sm-6 col-xs-12 container-name">
-                    <input type="text" id="autocomplete-client-name" name="name" class="form-control col-md-7 col-xs-12 @if ($errors->has('name')) parsley-error @endif" value="{{ old('name') ? old('name') : '' }}"  required autofocus>
+                    <input type="text" id="autocomplete-client-name" name="name" class="form-control col-md-7 col-xs-12 @if ($errors->has('name')) parsley-error @endif" value="{{ old('name') ? old('name') : '' }}"  required autofocus placeholder="Ingrese DNI, CUIT o nombre...">
                     <input type="hidden" id="user_id" name="user_id" value="{{ old('user_id') ? old('user_id') : '' }}">
                     @if ($errors->has('name')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('name') }}</li></ul> @endif
                     @if ($errors->has('user_id')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('user_id') }}</li></ul> @endif
@@ -53,20 +53,22 @@
                 </div>
 
                 <div class="form-group">
-                  <label class="control-label col-md-3 col-sm-3 col-xs-12" for="date_from">Desde</label>
+                  <label class="control-label col-md-3 col-sm-3 col-xs-12" for="periodo_from">Período Desde</label>
                   <div class="col-md-6 col-sm-6 col-xs-12 container-date-from">
-                    <input type="text" id="date_from" name="date_from" class="form-control col-md-7 col-xs-12 @if ($errors->has('date_from')) parsley-error @endif" value="{{ old('date_from') ? old('date_from') : '' }}"  placeholder="dd/mm/aaaa" data-inputmask="'mask': '99/99/9999'">
+                    <input type="text" id="date_from" name="date_from" class="form-control col-md-7 col-xs-12 @if ($errors->has('date_from')) parsley-error @endif" value="{{ old('date_from') ? old('date_from') : '' }}"  placeholder="mm/aaaa" data-inputmask="'mask': '99/9999'">
                     @if ($errors->has('date_from')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('date_from') }}</li></ul> @endif
                   </div>
                 </div>
 
                 <div class="form-group">
-                  <label class="control-label col-md-3 col-sm-3 col-xs-12" for="date_to">Hasta</label>
+                  <label class="control-label col-md-3 col-sm-3 col-xs-12" for="periodo_to">Período Hasta</label>
                   <div class="col-md-6 col-sm-6 col-xs-12 container-date-to">
-                    <input type="text" id="date_to" name="date_to" class="form-control col-md-7 col-xs-12 @if ($errors->has('date_to')) parsley-error @endif" value="{{ old('date_to') ? old('date_to') : '' }}"  placeholder="dd/mm/aaaa" data-inputmask="'mask': '99/99/9999'">
+                    <input type="text" id="date_to" name="date_to" class="form-control col-md-7 col-xs-12 @if ($errors->has('date_to')) parsley-error @endif" value="{{ old('date_to') ? old('date_to') : '' }}"  placeholder="mm/aaaa" data-inputmask="'mask': '99/9999'">
                     @if ($errors->has('date_to')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('date_to') }}</li></ul> @endif
                   </div>
                 </div>
+                
+                <!-- Opciones: Se decidió no incluir facturas anuladas; las Notas de Crédito se muestran junto a su factura cuando existen -->
 
                 <div class="ln_solid"></div>
                 <div class="form-group">
