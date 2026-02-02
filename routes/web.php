@@ -326,6 +326,7 @@ Route::group(['prefix' => 'admin'], function() {
 		// balance detalle
 		Route::get('/balance/detail', 'BillController@balanceDetalle');
 		Route::post('/balance/detail/search', 'BillController@balanceDetalleSearch');
+        Route::post('/balance/detail/notas', 'BillController@balanceDetalleNotas');
 		Route::get('/balance/detail/comprobante-pdf', 'BillController@getBalanceDetallePDF');
 		Route::get('/balance/detail/comprobante-xls', 'BillController@getBalanceDetalleXLS');
 

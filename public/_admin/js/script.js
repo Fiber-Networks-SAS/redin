@@ -2179,33 +2179,56 @@ function getBalanceDetalleScreen() {
                                 
                                 $.each( users, function( key, factura) {
 
-                                    if (factura.importe_pago != '') {
-                                    
-                                        class_tr =  '';
-                                        importe_pago = factura.importe_pago;
-                                        importe_adeudado = '';
-                                    
-                                    }else{
-                                        
-                                        class_tr =  'debe';
-                                        importe_pago = 0;
-                                        total_importe_adeudado = parseFloat(total_importe_adeudado) + parseFloat(factura.importe_total);
-                                        importe_adeudado = factura.importe_total;
+                                        // Skip metadata objects or invalid entries
+                                        if (!factura.talonario) return true;
 
+                                        var importe_pago_val = 0;
+
+                                        if (factura.is_nota_credito) {
+                                            class_tr = '';
+                                            importe_pago = '';
+                                            // Las notas de crédito restan (ya vienen con importe_total_numeric negativo)
+                                            total_importe_adeudado += (parseFloat(factura.importe_total_numeric) || 0);
+                                            importe_adeudado = factura.importe_total_formatted;
+                                        } else if (factura.is_anulada) {
+                                            // Facturas anuladas: no cuentan para totales
+                                            class_tr = '';
+                                            importe_pago = '';
+                                            importe_adeudado = '';
+                                        } else if (factura.importe_pago_numeric != '' && factura.importe_pago_numeric != null && factura.importe_pago_numeric != 0) {
+                                            class_tr =  '';
+                                            importe_pago = factura.importe_pago_formatted;
+                                            importe_adeudado = '';
+                                            importe_pago_val = parseFloat(factura.importe_pago_numeric) || 0;
+                                        } else {
+                                            class_tr =  'debe';
+                                            importe_pago = 0;
+                                            total_importe_adeudado += (parseFloat(factura.importe_total_numeric) || 0);
+                                            importe_adeudado = factura.importe_total_formatted;
+                                        }
+
+                                    // Totalizar: solo facturas válidas (no anuladas)
+                                    if (!factura.is_anulada) {
+                                        total_importe_facturado += (parseFloat(factura.importe_total_numeric) || 0);
+                                        total_importe_pagado += importe_pago_val;
                                     }
-
-                                    // totalizo las facturas y los pagos
-                                    total_importe_facturado = parseFloat(total_importe_facturado) + parseFloat(factura.importe_total);
-                                    total_importe_pagado = parseFloat(total_importe_pagado) + parseFloat(importe_pago);
 
                                     // compongo el cuerpo de la tabla
                                     result += '<tr class="'+class_tr+'"">';
                                         result += '<td class="center">'+factura.periodo+'</td>';
-                                        result += '<td><a href="/admin/period/bill/' + factura.id + '" target="_blank">'+factura.talonario.letra + ' ' + factura.talonario.nro_punto_vta + ' - '+ factura.nro_factura+'</a></td>';
+                                        if (factura.is_nota_credito) {
+                                            var tal_letra = (factura.talonario && factura.talonario.letra) ? factura.talonario.letra : '';
+                                            var tal_pv = (factura.talonario && factura.talonario.nro_punto_vta) ? factura.talonario.nro_punto_vta : '';
+                                            
+                                            result += '<td>' + 'Nota de Crédito: ' + tal_letra + ' ' + tal_pv + ' - ' + factura.nro_factura + '</td>';
+                                        } else {
+                                            var anulada_label = factura.is_anulada ? ' <span style="color: red; font-weight: bold;">(ANULADA)</span>' : '';
+                                            result += '<td><a href="/admin/period/bill/' + factura.id + '" target="_blank">'+factura.talonario.letra + ' ' + factura.talonario.nro_punto_vta + ' - '+ factura.nro_factura+'</a>' + anulada_label + '</td>';
+                                        }
                                         result += '<td class="center">'+factura.fecha_emision+'</td>';
-                                        result += '<td class="right">'+factura.importe_total+'</td>';
+                                        result += '<td class="right">'+factura.importe_total_formatted+'</td>';
                                         result += '<td class="center">'+factura.fecha_pago+'</td>';
-                                        result += '<td class="right">'+factura.importe_pago+'</td>';
+                                        result += '<td class="right">'+importe_pago+'</td>';
                                         result += '<td>'+factura.forma_pago+'</td>';
                                         result += '<td class="right">'+importe_adeudado+'</td>';
                                     result += '</tr>';

@@ -15,10 +15,12 @@ class AfipService
         
         // Verificar que los archivos existan
         if (!file_exists($certPath)) {
+            \Log::error('Certificado AFIP no encontrado en: ' . $certPath);
             throw new \Exception('Certificado AFIP no encontrado en: ' . $certPath);
         }
         
         if (!file_exists($keyPath)) {
+            \Log::error('Clave privada AFIP no encontrada en: ' . $keyPath);
             throw new \Exception('Clave privada AFIP no encontrada en: ' . $keyPath);
         }
         
@@ -27,19 +29,23 @@ class AfipService
         
         // Verificar que el contenido no esté vacío
         if (empty($cert)) {
+            \Log::error('El certificado AFIP está vacío');
             throw new \Exception('El certificado AFIP está vacío');
         }
         
         if (empty($key)) {
+            \Log::error('La clave privada AFIP está vacía');
             throw new \Exception('La clave privada AFIP está vacía');
         }
         
         // Verificar formato PEM básico (compatible con PHP < 8.0)
         if (strpos($cert, '-----BEGIN CERTIFICATE-----') === false || strpos($cert, '-----END CERTIFICATE-----') === false) {
+            \Log::error('El certificado AFIP no tiene formato PEM válido');
             throw new \Exception('El certificado AFIP no tiene formato PEM válido');
         }
         
         if (strpos($key, '-----BEGIN PRIVATE KEY-----') === false || strpos($key, '-----END PRIVATE KEY-----') === false) {
+            \Log::error('La clave privada AFIP no tiene formato PEM válido');
             throw new \Exception('La clave privada AFIP no tiene formato PEM válido');
         }
         
@@ -188,20 +194,30 @@ class AfipService
     /**
      * Factura B
      */
-    public function facturaB($ptoVta, $importe)
+    /**
+     * Genera Factura B, permitiendo asociar DNI si se provee.
+     * @param int $ptoVta
+     * @param float $importe
+     * @param string|null $dni DNI del cliente (opcional)
+     * @param int $docTipo Tipo de documento (opcional, default 99 Consumidor Final, 96 DNI)
+     */
+    public function facturaB($ptoVta, $importe, $dni = null, $docTipo = null)
     {
         $lastVoucher = $this->getLastVoucher($ptoVta, 6);
         $importeTotal = round($importe, 2);
         $importeNeto = round($importe / 1.21, 2);
         $importeIVA = round($importeTotal - $importeNeto, 2);
         $baseImponibleIVA = round($importeTotal, 2);
+        // Si se provee DNI, usar tipo 96 (DNI) y el número, si no, usar Consumidor Final
+        $docTipoFinal = $docTipo ?? ($dni ? 96 : 99);
+        $docNroFinal = $dni ? intval($dni) : 0;
         $data = [
             'CantReg'   => 1,
             'PtoVta'    => $ptoVta,
             'CbteTipo'  => 6, // Factura B
             'Concepto'  => 2,
-            'DocTipo'   => 99, // Consumidor Final
-            'DocNro'    => 0,
+            'DocTipo'   => $docTipoFinal,
+            'DocNro'    => $docNroFinal,
             'CbteDesde' => $lastVoucher + 1,
             'CbteHasta' => $lastVoucher + 1,
             'CbteFch'   => intval(date('Ymd')),

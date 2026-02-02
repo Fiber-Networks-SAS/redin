@@ -39,9 +39,9 @@
                 <input type="hidden" id="mode" name="mode" value="create">
 
                 <div class="form-group">
-                  <label class="control-label col-md-3 col-sm-3 col-xs-12" for="name">Nombre del Cliente <span class="required">*</span></label>
+                  <label class="control-label col-md-3 col-sm-3 col-xs-12" for="name">Cliente (DNI/CUIT) <span class="required">*</span></label>
                   <div class="col-md-6 col-sm-6 col-xs-12 container-name">
-                    <input type="text" id="autocomplete-client-name" name="name" class="form-control col-md-7 col-xs-12 @if ($errors->has('name')) parsley-error @endif" value="{{ old('name') ? old('name') : '' }}"  required autofocus>
+                    <input type="text" id="autocomplete-client-name" name="name" class="form-control col-md-7 col-xs-12 @if ($errors->has('name')) parsley-error @endif" value="{{ old('name') ? old('name') : '' }}"  required autofocus placeholder="Ingrese DNI, CUIT o nombre...">
                     <input type="hidden" id="user_id" name="user_id" value="{{ old('user_id') ? old('user_id') : '' }}">
                     @if ($errors->has('name')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('name') }}</li></ul> @endif
                     @if ($errors->has('user_id')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('user_id') }}</li></ul> @endif
@@ -73,7 +73,7 @@
                     @if ($errors->has('contrato_fecha')) <ul class="parsley-errors-list filled"><li class="parsley">{{ $errors->first('contrato_fecha') }}</li></ul> @endif
                   </div>
                 </div>
-
+                
                 <div class="form-group">
                   <label class="control-label col-md-3 col-sm-3 col-xs-12" for="alta_servicio">Fecha de Alta</label>
                   <div class="col-md-6 col-sm-6 col-xs-12">
