@@ -4665,43 +4665,118 @@ class BillController extends Controller
             $clientRole = Role::where('name', 'client')->first();
             $users = $clientRole ? $clientRole->users()->where('status', 1)->get() : collect([]);
 
-            // Obtener IDs de clientes que ya tienen factura
+            Log::info("verifyMissingBills - Clientes activos con rol client", [
+                'total_users' => count($users),
+                'periodo' => $periodo
+            ]);
+
+            // Obtener IDs de clientes que ya tienen factura ACTIVA (no anulada)
             $usuariosConFactura = Factura::where('periodo', $periodo)
+                ->whereNull('deleted_at')  // Excluir facturas anuladas
                 ->pluck('user_id')
                 ->unique()
                 ->toArray();
 
-            // Filtrar clientes sin factura que tienen servicios activos
+            Log::info("verifyMissingBills - Usuarios con factura activa", [
+                'cantidad' => count($usuariosConFactura),
+                'user_ids' => $usuariosConFactura
+            ]);
+
+            // Filtrar clientes sin factura que tienen servicios FACTURABLES
             $clientesSinFactura = [];
+            $debugInfo = [
+                'users_sin_factura' => 0,
+                'users_sin_servicios' => 0,
+                'users_con_servicios_inactivos' => 0,
+                'users_no_facturables' => 0,
+            ];
             
             foreach ($users as $user) {
                 if (!in_array($user->id, $usuariosConFactura)) {
-                    // Verificar si tiene servicios activos
-                    $serviciosActivos = $user->servicios()->where('status', 1)->count();
+                    $debugInfo['users_sin_factura']++;
                     
-                    if ($serviciosActivos > 0) {
+                    // Verificar si tiene servicios FACTURABLES para este periodo
+                    $serviciosFacturables = 0;
+                    $serviciosDelUsuario = $user->servicios;
+                    
+                    if (count($serviciosDelUsuario) == 0) {
+                        $debugInfo['users_sin_servicios']++;
+                        continue;
+                    }
+                    
+                    $serviciosActivosCount = 0;
+                    foreach ($serviciosDelUsuario as $servicio) {
+                        // Usar la misma lógica que completeMissingBills
+                        if ($servicio->status != 1) {
+                            $debugInfo['users_con_servicios_inactivos']++;
+                            continue;
+                        }
+                        
+                        $serviciosActivosCount++;
+                        $alta_servicio_periodo = Carbon::parse($servicio->alta_servicio)->format('m/Y');
+                        
+                        // Verificar si es facturable
+                        if ($servicio->pp_flag == 1) {
+                            $ifBillable = $this->getIfBillablePlanPago($user, $servicio);
+                        } else {
+                            $ifBillable = $this->getIfBillable($periodo, $alta_servicio_periodo);
+                        }
+                        
+                        // Debug: solo loguear los primeros 5 usuarios para no saturar
+                        if ($debugInfo['users_sin_factura'] <= 5) {
+                            Log::info("verifyMissingBills - Evaluando servicio", [
+                                'user_id' => $user->id,
+                                'nro_cliente' => $user->nro_cliente,
+                                'servicio_id' => $servicio->servicio_id,
+                                'servicio_status' => $servicio->status,
+                                'pp_flag' => $servicio->pp_flag,
+                                'alta_servicio' => $servicio->alta_servicio,
+                                'alta_servicio_periodo' => $alta_servicio_periodo,
+                                'periodo_a_facturar' => $periodo,
+                                'ifBillable' => $ifBillable
+                            ]);
+                        }
+                        
+                        if ($ifBillable) {
+                            $serviciosFacturables++;
+                        }
+                    }
+                    
+                    if ($serviciosActivosCount == 0) {
+                        $debugInfo['users_sin_servicios_activos'] = ($debugInfo['users_sin_servicios_activos'] ?? 0) + 1;
+                    }
+                    
+                    if ($serviciosFacturables == 0) {
+                        $debugInfo['users_no_facturables']++;
+                    }
+                    
+                    if ($serviciosFacturables > 0) {
                         $clientesSinFactura[] = [
                             'id' => $user->id,
-                            'nro_cliente' => str_pad($user->nro_cliente, 5, '0', STR_PAD_LEFT),
+                            'nro_cliente' => $user->nro_cliente,
                             'nombre' => $user->nombre,
                             'apellido' => $user->apellido,
                             'dni' => $user->dni,
-                            'servicios_count' => $serviciosActivos
+                            'servicios_count' => $serviciosFacturables
                         ];
                     }
                 }
             }
 
+            Log::info("verifyMissingBills - Debug info", $debugInfo);
+
             return response()->json([
                 'success' => true,
                 'periodo' => $periodo,
                 'clientes_sin_factura' => count($clientesSinFactura),
-                'clientes' => $clientesSinFactura
+                'clientes' => $clientesSinFactura,
+                'debug' => $debugInfo
             ], 200);
 
         } catch (Exception $e) {
             Log::error("Error en verifyMissingBills", [
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
 
             return response()->json([
@@ -4757,13 +4832,14 @@ class BillController extends Controller
                 ], 404);
             }
 
-            // Obtener IDs de clientes que ya tienen factura en este periodo
+            // Obtener IDs de clientes que ya tienen factura ACTIVA en este periodo (no anulada)
             $usuariosConFactura = Factura::where('periodo', $periodo)
+                ->whereNull('deleted_at')  // Excluir facturas anuladas
                 ->pluck('user_id')
                 ->unique()
                 ->toArray();
 
-            Log::info("Clientes con factura existente", [
+            Log::info("Clientes con factura existente (no anuladas)", [
                 'cantidad' => count($usuariosConFactura),
                 'user_ids' => $usuariosConFactura
             ]);
@@ -4798,6 +4874,9 @@ class BillController extends Controller
                     if ($servicio->status == 1 && $ifBillable) {
                         // Calcular costos del servicio (igual que en store())
                         if ($servicio->pp_flag == 1) {
+                            // Plan de pago - inicializar proporcional en 0
+                            $servicio->costo_proporcional_importe = 0;
+                            $servicio->costo_proporcional_dias = 0;
                             $servicio->costo_abono_pagar = 0;
                             $servicio->costo_instalacion_cuotas_pagas = $this->getNroCuotasInstalacionPlanPago($user->id, $servicio->servicio_id);
                             $servicio->costo_instalacion_importe_pagar = $servicio->abono_mensual;
@@ -4857,10 +4936,14 @@ class BillController extends Controller
             $errores = [];
 
             foreach ($items as $item) {
+                // Usar transacción individual por cada factura para evitar duplicados
+                // y permitir que si una falla, las demás continúen
+                DB::beginTransaction();
                 try {
                     $factura = $this->generarFacturaIndividual($item, $periodo, $fecha_emision, $interes);
                     
                     if ($factura) {
+                        DB::commit();
                         $facturas[] = $factura;
                         $facturasCreadas++;
                         
@@ -4870,8 +4953,11 @@ class BillController extends Controller
                             'nro_factura' => $factura->nro_factura,
                             'importe_total' => $factura->importe_total
                         ]);
+                    } else {
+                        DB::rollBack();
                     }
                 } catch (Exception $e) {
+                    DB::rollBack();
                     $errores[] = [
                         'user_id' => $item['cliente']->id,
                         'nro_cliente' => $item['cliente']->nro_cliente,
@@ -4886,7 +4972,25 @@ class BillController extends Controller
                 }
             }
 
-            // Generar PDFs de las facturas creadas
+            // Envío automático de emails para todas las facturas creadas (igual que store())
+            foreach ($facturas as $factura) {
+                try {
+                    $requestEmail = new \Illuminate\Http\Request();
+                    $requestEmail->merge(['fecha_emision' => $fecha_emision]);
+                    $this->sendEmailFactura($requestEmail, $factura);
+                    Log::info("Email enviado automáticamente para factura", [
+                        'factura_id' => $factura->id,
+                        'cliente_email' => $factura->cliente->email ?? 'N/A'
+                    ]);
+                } catch (Exception $e) {
+                    Log::error("Error enviando email automático para factura", [
+                        'factura_id' => $factura->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            // Generar PDFs de las facturas creadas (genera el PDF conjunto del periodo)
             if ($facturasCreadas > 0) {
                 try {
                     $this->setFacturasPeriodoPDF($periodo);
@@ -4942,9 +5046,31 @@ class BillController extends Controller
      * @param string $fecha_emision Fecha de emisión en formato d/m/Y
      * @param Interes $interes Configuración de intereses
      * @return Factura|null
+     * @throws Exception Si ya existe una factura para este cliente en el periodo
      */
     private function generarFacturaIndividual($item, $periodo, $fecha_emision, $interes)
     {
+        // ==========================================
+        // DOBLE VERIFICACIÓN DE SEGURIDAD
+        // Verificar que NO exista factura para este cliente en este periodo
+        // Esta es una verificación de seguridad adicional para evitar duplicados
+        // Usa lockForUpdate() para evitar race conditions en ejecuciones concurrentes
+        // ==========================================
+        $facturaExistente = Factura::where('user_id', $item['cliente']->id)
+            ->where('periodo', $periodo)
+            ->lockForUpdate()
+            ->first();
+        
+        if ($facturaExistente) {
+            Log::warning("SEGURIDAD: Intento de crear factura duplicada bloqueado", [
+                'user_id' => $item['cliente']->id,
+                'nro_cliente' => $item['cliente']->nro_cliente,
+                'periodo' => $periodo,
+                'factura_existente_id' => $facturaExistente->id
+            ]);
+            throw new Exception("Ya existe una factura para este cliente (ID: {$facturaExistente->id}) en el periodo {$periodo}");
+        }
+
         // Cálculo de importes con bonificaciones aplicadas
         $subtotal = 0;
         $bonificacion_total = 0;
@@ -5196,15 +5322,26 @@ class BillController extends Controller
                 $factura_detalle->save();
             }
 
-            // Enviar email automático
-            try {
-                $request = new \Illuminate\Http\Request();
-                $request->merge(['fecha_emision' => $fecha_emision]);
-                $this->sendEmailFactura($request, $factura);
-            } catch (Exception $e) {
-                Log::error("Error enviando email automático para factura", [
+            // Generar códigos QR de MercadoPago para la factura
+            // Solo si la factura tiene importe pendiente y no está pagada
+            if ($factura->importe_total > 0 && empty($factura->fecha_pago)) {
+                try {
+                    $this->generatePaymentQRCodes($factura);
+                    Log::info("QR codes generados para factura", [
+                        'factura_id' => $factura->id,
+                        'importe_total' => $factura->importe_total
+                    ]);
+                } catch (Exception $eQR) {
+                    Log::error("Error generando QR codes para factura", [
+                        'factura_id' => $factura->id,
+                        'error' => $eQR->getMessage()
+                    ]);
+                }
+            } else {
+                Log::info('Factura NO requiere QR codes - Ya está pagada o importe es 0', [
                     'factura_id' => $factura->id,
-                    'error' => $e->getMessage()
+                    'importe_total' => $factura->importe_total,
+                    'fecha_pago' => $factura->fecha_pago
                 ]);
             }
 
