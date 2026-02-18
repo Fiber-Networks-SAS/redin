@@ -584,7 +584,16 @@ class BillController extends Controller
 
 
                 // Regenerar c�digos QR con el nuevo importe
-                $this->generatePaymentQRCodes($factura);
+                // Solo si la factura tiene importe pendiente y no está pagada
+                if ($factura->importe_total > 0 && empty($factura->fecha_pago)) {
+                    $this->generatePaymentQRCodes($factura);
+                } else {
+                    Log::info('Factura NO requiere QR codes - Ya está pagada o importe es 0', [
+                        'factura_id' => $factura->id,
+                        'importe_total' => $factura->importe_total,
+                        'fecha_pago' => $factura->fecha_pago
+                    ]);
+                }
 
 
                 // Emitir nota de cr�dito en AFIP
@@ -2244,7 +2253,16 @@ class BillController extends Controller
 
 
                 // Primero generar c�digos QR de MercadoPago para cada vencimiento
-                $this->generatePaymentQRCodes($factura);
+                // Solo si la factura tiene importe pendiente y no está pagada
+                if ($factura->importe_total > 0 && empty($factura->fecha_pago)) {
+                    $this->generatePaymentQRCodes($factura);
+                } else {
+                    Log::info('Factura NO requiere QR codes - Ya está pagada o importe es 0', [
+                        'factura_id' => $factura->id,
+                        'importe_total' => $factura->importe_total,
+                        'fecha_pago' => $factura->fecha_pago
+                    ]);
+                }
 
 
                 // Crear PDF (los c�digos QR se obtienen desde la vista usando el m�todo del modelo)
@@ -3924,17 +3942,24 @@ class BillController extends Controller
                             Log::info('Factura simple actualizada con datos AFIP', ['factura_id' => $factura->id, 'cae' => $factura->cae]);
                         } else {
                             Log::warning('AFIP no devolvi� CAE v�lido para factura simple', ['factura_id' => $factura->id, 'afip_response' => $afipResponse]);
-                        }
-                    } catch (\Exception $e) {
-                        Log::error('Error al emitir factura simple en AFIP: ' . $e->getMessage());
-                        // No interrumpe el proceso, la factura se guarda sin CAE
-                    }
+                }
+            } catch (\Exception $e) {
+                Log::error('Error al emitir factura simple en AFIP: ' . $e->getMessage());
+                // No interrumpe el proceso, la factura se guarda sin CAE
+            }
 
 
-                    // Generar c�digos QR con el nuevo importe
-                    $this->generatePaymentQRCodes($factura);
-
-
+            // Generar c�digos QR con el nuevo importe
+            // Solo si la factura tiene importe pendiente y no está pagada
+            if ($factura->importe_total > 0 && empty($factura->fecha_pago)) {
+                $this->generatePaymentQRCodes($factura);
+            } else {
+                Log::info('Factura NO requiere QR codes - Ya está pagada o importe es 0', [
+                    'factura_id' => $factura->id,
+                    'importe_total' => $factura->importe_total,
+                    'fecha_pago' => $factura->fecha_pago
+                ]);
+            }
                     // Detalle
                     foreach ($item['servicios_activos'] as $servicio) {
 
@@ -4072,7 +4097,16 @@ class BillController extends Controller
 
 
         // Primero generar c�digos QR de MercadoPago para cada vencimiento
-        $this->generatePaymentQRCodes($factura);
+        // Solo si la factura tiene importe pendiente y no está pagada
+        if ($factura->importe_total > 0 && empty($factura->fecha_pago)) {
+            $this->generatePaymentQRCodes($factura);
+        } else {
+            Log::info('Factura NO requiere QR codes - Ya está pagada o importe es 0', [
+                'factura_id' => $factura->id,
+                'importe_total' => $factura->importe_total,
+                'fecha_pago' => $factura->fecha_pago
+            ]);
+        }
 
 
         // Crear PDF (los c�digos QR se obtienen desde la vista usando el m�todo del modelo)
@@ -4544,8 +4578,8 @@ class BillController extends Controller
             }
 
 
-            // Regenerar códigos QR de MercadoPago SOLO si la factura NO está pagada
-            if (empty($factura->fecha_pago)) {
+            // Regenerar códigos QR de MercadoPago SOLO si la factura NO está pagada y tiene importe
+            if ($factura->importe_total > 0 && empty($factura->fecha_pago)) {
                 try {
                     $this->generatePaymentQRCodes($factura);
                     Log::info("Códigos QR generados para factura ID: {$id} (factura impaga)");
@@ -4598,6 +4632,586 @@ class BillController extends Controller
                 'error' => $e->getMessage()
             ];
         }
+    }
+
+
+    /**
+     * Mostrar vista para completar facturas faltantes
+     */
+    public function showCompleteMissingView()
+    {
+        return view('period.complete_missing');
+    }
+
+    /**
+     * Verificar clientes sin factura en un periodo
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function verifyMissingBills(Request $request)
+    {
+        try {
+            $periodo = $request->periodo;
+
+            if (!$periodo) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Período requerido.'
+                ], 400);
+            }
+
+            // Obtener clientes activos con rol 'client'
+            $clientRole = Role::where('name', 'client')->first();
+            $users = $clientRole ? $clientRole->users()->where('status', 1)->get() : collect([]);
+
+            // Obtener IDs de clientes que ya tienen factura
+            $usuariosConFactura = Factura::where('periodo', $periodo)
+                ->pluck('user_id')
+                ->unique()
+                ->toArray();
+
+            // Filtrar clientes sin factura que tienen servicios activos
+            $clientesSinFactura = [];
+            
+            foreach ($users as $user) {
+                if (!in_array($user->id, $usuariosConFactura)) {
+                    // Verificar si tiene servicios activos
+                    $serviciosActivos = $user->servicios()->where('status', 1)->count();
+                    
+                    if ($serviciosActivos > 0) {
+                        $clientesSinFactura[] = [
+                            'id' => $user->id,
+                            'nro_cliente' => str_pad($user->nro_cliente, 5, '0', STR_PAD_LEFT),
+                            'nombre' => $user->nombre,
+                            'apellido' => $user->apellido,
+                            'dni' => $user->dni,
+                            'servicios_count' => $serviciosActivos
+                        ];
+                    }
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'periodo' => $periodo,
+                'clientes_sin_factura' => count($clientesSinFactura),
+                'clientes' => $clientesSinFactura
+            ], 200);
+
+        } catch (Exception $e) {
+            Log::error("Error en verifyMissingBills", [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al verificar clientes.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Completar facturas faltantes de un periodo
+     * Identifica clientes que deberían tener factura pero no la tienen y las genera
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function completeMissingBills(Request $request)
+    {
+        try {
+            // Validar parámetros requeridos
+            $rules = [
+                'periodo' => 'required|date_format:m/Y',
+                'fecha_emision' => 'required|date_format:d/m/Y',
+            ];
+
+            $validator = Validator::make($request->all(), $rules);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Parámetros inválidos.',
+                    'errors' => $validator->errors()
+                ], 400);
+            }
+
+            $periodo = $request->periodo;
+            $fecha_emision = $request->fecha_emision;
+
+            Log::info("=== COMPLETANDO FACTURAS FALTANTES DEL PERIODO ===", [
+                'periodo' => $periodo,
+                'fecha_emision' => $fecha_emision
+            ]);
+
+            // Obtener todos los clientes activos con rol 'client'
+            $clientRole = Role::where('name', 'client')->first();
+            $users = $clientRole ? $clientRole->users()->get() : collect([]);
+
+            if (count($users) == 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontraron clientes activos.',
+                ], 404);
+            }
+
+            // Obtener IDs de clientes que ya tienen factura en este periodo
+            $usuariosConFactura = Factura::where('periodo', $periodo)
+                ->pluck('user_id')
+                ->unique()
+                ->toArray();
+
+            Log::info("Clientes con factura existente", [
+                'cantidad' => count($usuariosConFactura),
+                'user_ids' => $usuariosConFactura
+            ]);
+
+            // Filtrar clientes que deberían facturarse
+            $items = [];
+            $interes = Interes::find(1);
+            
+            foreach ($users as $user) {
+                // Saltar si el usuario ya tiene factura o no está activo
+                if (in_array($user->id, $usuariosConFactura) || $user->status != 1) {
+                    continue;
+                }
+
+                $serviciosFacturables = [];
+                
+                foreach ($user->servicios as $servicio) {
+                    // Verificar si el servicio es facturable para este periodo
+                    $alta_servicio_periodo = Carbon::parse($servicio->alta_servicio)->format('m/Y');
+
+                    // Control para saber si es un servicio o un plan de pago
+                    if ($servicio->pp_flag == 1) {
+                        $ifBillable = $this->getIfBillablePlanPago($user, $servicio);
+                    } else {
+                        $ifBillable = $this->getIfBillable($periodo, $alta_servicio_periodo);
+                        $servicio->plan_pago = $this->getPlanPagoValue($servicio->plan_pago);
+                    }
+
+                    $servicio->ifBillable = $ifBillable;
+
+                    // Solo servicios activos y facturables
+                    if ($servicio->status == 1 && $ifBillable) {
+                        // Calcular costos del servicio (igual que en store())
+                        if ($servicio->pp_flag == 1) {
+                            $servicio->costo_abono_pagar = 0;
+                            $servicio->costo_instalacion_cuotas_pagas = $this->getNroCuotasInstalacionPlanPago($user->id, $servicio->servicio_id);
+                            $servicio->costo_instalacion_importe_pagar = $servicio->abono_mensual;
+                        } else {
+                            // Proporcional
+                            $proporcional = $this->getProporcional($user->id, $periodo, $servicio->alta_servicio, $servicio->abono_proporcional);
+                            $servicio->costo_proporcional_importe = $proporcional['importe'];
+                            $servicio->costo_proporcional_dias = $proporcional['dias'];
+
+                            if ($servicio->costo_proporcional_importe > 0) {
+                                $servicio->costo_abono_pagar = 0;
+                            } else {
+                                $servicio->costo_abono_pagar = $servicio->abono_mensual;
+                            }
+
+                            // Cuotas de instalación
+                            $servicio->costo_instalacion_cuotas_pagas = $this->getNroCuotasInstalacion($periodo, $servicio->alta_servicio);
+
+                            if ($servicio->costo_instalacion_cuotas_pagas < $servicio->plan_pago) {
+                                $servicio->costo_instalacion_importe_pagar = $servicio->costo_instalacion / $servicio->plan_pago;
+                            } else {
+                                $servicio->costo_instalacion_importe_pagar = 0;
+                            }
+                        }
+
+                        $serviciosFacturables[] = $servicio;
+                    }
+                }
+
+                // Si el cliente tiene servicios facturables, agregarlo a items
+                if (count($serviciosFacturables) > 0) {
+                    $items[$user->id]['cliente'] = $user;
+                    $items[$user->id]['servicios_activos'] = $serviciosFacturables;
+                    $items[$user->id]['domicilio'] = strtolower($user->calle . ' ' . $user->altura);
+                }
+            }
+
+            if (count($items) == 0) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No hay facturas faltantes para completar.',
+                    'facturas_creadas' => 0
+                ], 200);
+            }
+
+            // Ordenar items por domicilio
+            usort($items, array($this, "cmp_obj"));
+
+            Log::info("Clientes sin factura que requieren facturación", [
+                'cantidad' => count($items),
+                'user_ids' => array_keys($items)
+            ]);
+
+            // Generar las facturas (misma lógica que store())
+            $facturas = [];
+            $facturasCreadas = 0;
+            $errores = [];
+
+            foreach ($items as $item) {
+                try {
+                    $factura = $this->generarFacturaIndividual($item, $periodo, $fecha_emision, $interes);
+                    
+                    if ($factura) {
+                        $facturas[] = $factura;
+                        $facturasCreadas++;
+                        
+                        Log::info("Factura creada exitosamente", [
+                            'factura_id' => $factura->id,
+                            'user_id' => $factura->user_id,
+                            'nro_factura' => $factura->nro_factura,
+                            'importe_total' => $factura->importe_total
+                        ]);
+                    }
+                } catch (Exception $e) {
+                    $errores[] = [
+                        'user_id' => $item['cliente']->id,
+                        'nro_cliente' => $item['cliente']->nro_cliente,
+                        'error' => $e->getMessage()
+                    ];
+                    
+                    Log::error("Error al generar factura individual", [
+                        'user_id' => $item['cliente']->id,
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                }
+            }
+
+            // Generar PDFs de las facturas creadas
+            if ($facturasCreadas > 0) {
+                try {
+                    $this->setFacturasPeriodoPDF($periodo);
+                    Log::info("PDFs generados para periodo", ['periodo' => $periodo]);
+                } catch (Exception $e) {
+                    Log::error("Error al generar PDFs", [
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Proceso completado: {$facturasCreadas} facturas creadas.",
+                'summary' => [
+                    'periodo' => $periodo,
+                    'total_clientes_sin_factura' => count($items),
+                    'facturas_creadas' => $facturasCreadas,
+                    'errores' => count($errores),
+                    'processed_at' => date('Y-m-d H:i:s')
+                ],
+                'facturas' => array_map(function($f) {
+                    return [
+                        'id' => $f->id,
+                        'user_id' => $f->user_id,
+                        'nro_factura' => $f->nro_factura,
+                        'importe_total' => $f->importe_total,
+                        'cae' => $f->cae
+                    ];
+                }, $facturas),
+                'errores' => $errores
+            ], 200);
+
+        } catch (Exception $e) {
+            Log::error("Error crítico en completeMissingBills", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error crítico al completar facturas.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Generar una factura individual con toda la lógica del proceso normal
+     * 
+     * @param array $item Cliente con servicios activos
+     * @param string $periodo Periodo en formato m/Y
+     * @param string $fecha_emision Fecha de emisión en formato d/m/Y
+     * @param Interes $interes Configuración de intereses
+     * @return Factura|null
+     */
+    private function generarFacturaIndividual($item, $periodo, $fecha_emision, $interes)
+    {
+        // Cálculo de importes con bonificaciones aplicadas
+        $subtotal = 0;
+        $bonificacion_total = 0;
+        $fecha_facturacion = Carbon::createFromFormat('d/m/Y', $fecha_emision);
+
+        foreach ($item['servicios_activos'] as $servicio) {
+            $importe_servicio = $servicio->costo_proporcional_importe + $servicio->costo_abono_pagar + $servicio->costo_instalacion_importe_pagar;
+
+            // Verificar bonificación vigente para este servicio
+            $bonificacion = BonificacionServicio::where('service_id', $servicio->servicio_id)
+                ->where('activo', true)
+                ->whereRaw('fecha_inicio <= ?', [$fecha_facturacion])
+                ->whereRaw('DATE_ADD(fecha_inicio, INTERVAL periodos_bonificacion MONTH) > ?', [$fecha_facturacion])
+                ->first();
+
+            if ($bonificacion) {
+                $descuento_servicio = $bonificacion->calcularBonificacion($importe_servicio);
+                $bonificacion_total += $descuento_servicio;
+                $servicio->bonificacion_aplicada = $descuento_servicio;
+                $servicio->bonificacion_id = $bonificacion->id;
+                $servicio->bonificacion_detalle = $bonificacion->descripcion ? $bonificacion->descripcion : 'Bonificacion aplicada al servicio';
+                $servicio->bonificacion_porcentaje = $bonificacion->porcentaje_bonificacion;
+                $servicio->iva_bonificacion = $descuento_servicio * 0.21;
+            } else {
+                $servicio->bonificacion_aplicada = 0;
+                $servicio->bonificacion_id = null;
+                $servicio->bonificacion_porcentaje = 0;
+            }
+
+            $subtotal += $importe_servicio;
+        }
+
+        // Cálculo de IVA
+        $iva_subtotal = ($subtotal) * 0.21;
+        $iva_bonificacion = ($bonificacion_total) * 0.21;
+        $iva = ($subtotal - $bonificacion_total) * 0.21;
+
+        // Crear cabecera de factura
+        $factura = new Factura;
+        $factura->user_id = $item['cliente']->id;
+        $factura->nro_cliente = $item['cliente']->nro_cliente;
+        $factura->talonario_id = $item['cliente']->talonario_id;
+        $factura->nro_factura = $this->getNroFactura($item['cliente']->talonario_id);
+        $factura->periodo = $periodo;
+        $factura->fecha_emision = Carbon::createFromFormat('d/m/Y', $fecha_emision);
+        $factura->importe_subtotal = $this->floatvalue(number_format($subtotal, 2));
+        $factura->importe_subtotal_iva = $this->floatvalue(number_format($iva_subtotal, 2));
+        $factura->importe_bonificacion = $this->floatvalue(number_format($bonificacion_total, 2));
+        $factura->importe_bonificacion_iva = $this->floatvalue(number_format($iva_bonificacion, 2));
+        $factura->importe_total = $this->floatvalue(number_format($subtotal - $bonificacion_total, 2));
+        $factura->importe_iva = $this->floatvalue(number_format($iva, 2));
+
+        // Calcular vencimientos
+        $mes_periodo = substr($periodo, 0, 2);
+        $ano_periodo = substr($periodo, 3, 4);
+
+        $periodo_actual = Carbon::createFromFormat('m/Y', $factura->periodo);
+        $periodo_siguiente = $periodo_actual->addMonthNoOverflow(1);
+        $ano_periodo_siguiente = substr($periodo_siguiente, 0, 4);
+        $mes_periodo_siguiente = substr($periodo_siguiente, 5, 2);
+
+        // Obtener datos del talonario
+        $talonario = Talonario::find($factura->talonario_id);
+        $factura_nro_punto_vta = $this->zerofill($talonario->nro_punto_vta, 4);
+        $factura_nro_factura = $this->zerofill($factura->nro_factura);
+
+        // Primer vencimiento
+        $factura->primer_vto_fecha = Carbon::createFromFormat('d/m/Y', $interes->primer_vto_dia . '/' . $mes_periodo_siguiente . '/' . $ano_periodo_siguiente);
+        $factura->primer_vto_codigo = $this->getCodigoPago($factura->importe_total, $factura->primer_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
+
+        // Segundo vencimiento
+        $factura->segundo_vto_fecha = Carbon::createFromFormat('d/m/Y', $interes->segundo_vto_dia . '/' . $mes_periodo_siguiente . '/' . $ano_periodo_siguiente);
+        $factura->segundo_vto_tasa = $interes->segundo_vto_tasa;
+        $factura->segundo_vto_importe = $this->getImporteConTasaInteres($factura->importe_total, $interes->segundo_vto_tasa);
+        $factura->segundo_vto_codigo = $this->getCodigoPago($factura->segundo_vto_importe, $factura->segundo_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
+
+        // Tercer vencimiento
+        $factura->tercer_vto_tasa = $interes->tercer_vto_tasa;
+
+        // Guardar factura
+        if ($factura->save()) {
+            // Aplicar saldo a favor si existe
+            try {
+                $periodoFactura = $factura->periodo;
+                $saldoDisponible = $this->getTotalSaldoFavorCliente($factura->user_id, $periodoFactura);
+
+                if ($saldoDisponible > 0) {
+                    $resultado = $this->aplicarSaldoFavorAFactura($factura->user_id, $factura->id, $factura->importe_total, $periodoFactura);
+                    $importeDescontado = $resultado['importe_descontado'];
+
+                    if ($importeDescontado > 0) {
+                        $descripcion = 'Saldo a favor aplicado';
+                        $caesOriginales = [];
+
+                        if (count($resultado['saldos_aplicados']) > 0) {
+                            $periodos = [];
+                            foreach ($resultado['saldos_aplicados'] as $saldoAplicado) {
+                                $saldo = SaldoFavor::with(['facturaAnulada' => function ($query) {
+                                    $query->withTrashed();
+                                }])->find($saldoAplicado['saldo_id']);
+
+                                if ($saldo) {
+                                    $periodos[] = $saldo->periodo;
+                                    if ($saldo->facturaAnulada && $saldo->facturaAnulada->cae) {
+                                        $caesOriginales[] = [
+                                            'factura_id' => $saldo->facturaAnulada->id,
+                                            'nro_factura' => $saldo->facturaAnulada->nro_factura,
+                                            'cae' => $saldo->facturaAnulada->cae,
+                                            'cae_vto' => $saldo->facturaAnulada->cae_vto,
+                                            'periodo' => $saldo->periodo,
+                                            'importe_aplicado' => $saldoAplicado['importe_aplicado']
+                                        ];
+                                    }
+                                }
+                            }
+                            $periodos = array_unique($periodos);
+                            $descripcion .= ' de período(s): ' . implode(', ', $periodos);
+                        }
+
+                        if (!empty($caesOriginales) && count($caesOriginales) == 1) {
+                            $factura->cae = $caesOriginales[0]['cae'];
+                            $factura->cae_vto = $caesOriginales[0]['cae_vto'] ?? null;
+                        }
+
+                        $bonificacion = $this->crearBonificacionPorSaldoFavor($factura->id, $importeDescontado, $descripcion);
+
+                        $factura->importe_bonificacion += $importeDescontado;
+                        $factura->importe_total -= $importeDescontado;
+                        if ($factura->importe_total < 0) {
+                            $factura->importe_total = 0;
+                        }
+
+                        // Recalcular vencimientos con el nuevo importe_total
+                        $factura->primer_vto_codigo = $this->getCodigoPago($factura->importe_total, $factura->primer_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
+                        $factura->segundo_vto_importe = $this->getImporteConTasaInteres($factura->importe_total, $interes->segundo_vto_tasa);
+                        $factura->segundo_vto_codigo = $this->getCodigoPago($factura->segundo_vto_importe, $factura->segundo_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
+
+                        $factura->save();
+
+                        // Si el saldo cubrió todo, marcar como pagada
+                        if ($factura->importe_total == 0) {
+                            $factura->importe_pago = 0;
+                            $factura->forma_pago = 5;
+                            $factura->fecha_pago = Carbon::now();
+                            $factura->save();
+                        }
+                    }
+                }
+            } catch (Exception $eSaldo) {
+                Log::error('ERROR aplicando saldo a favor en factura individual', [
+                    'factura_id' => $factura->id,
+                    'mensaje' => $eSaldo->getMessage()
+                ]);
+            }
+
+            // Emitir factura en AFIP solo si no está cubierta por saldo a favor
+            $debeEmitirEnAfip = $factura->importe_total > 0;
+
+            if ($debeEmitirEnAfip) {
+                try {
+                    if ($this->afipService === null) {
+                        throw new Exception('AfipService no está disponible');
+                    }
+
+                    if ($talonario->letra == 'A') {
+                        $afipResponse = $this->afipService->facturaA(
+                            $talonario->nro_punto_vta,
+                            $item['cliente']->dni,
+                            $factura->importe_total
+                        );
+                    } else {
+                        $afipResponse = $this->afipService->facturaB(
+                            $talonario->nro_punto_vta,
+                            $factura->importe_total,
+                            $item['cliente']->dni
+                        );
+                    }
+
+                    if (isset($afipResponse['CAE']) && !empty($afipResponse['CAE'])) {
+                        $factura->cae = $afipResponse['CAE'];
+                        try {
+                            if (isset($afipResponse['CAEFchVto'])) {
+                                $caeVto = $afipResponse['CAEFchVto'];
+                                if (strlen($caeVto) == 8 && is_numeric($caeVto)) {
+                                    $factura->cae_vto = Carbon::createFromFormat('Ymd', $caeVto);
+                                } else {
+                                    $caeVtoStr = (string) $caeVto;
+                                    $factura->cae_vto = Carbon::parse($caeVtoStr);
+                                }
+                            } else {
+                                $factura->cae_vto = null;
+                            }
+                        } catch (Exception $e) {
+                            Log::error('Error parsing CAEFchVto', ['error' => $e->getMessage()]);
+                            $factura->cae_vto = null;
+                        }
+                        $factura->save();
+                    }
+                } catch (Exception $e) {
+                    Log::error('Error al emitir factura individual en AFIP', [
+                        'error' => $e->getMessage(),
+                        'factura_id' => $factura->id
+                    ]);
+                }
+            }
+
+            // Crear detalle de factura
+            foreach ($item['servicios_activos'] as $servicio) {
+                $factura_detalle = new FacturaDetalle;
+                $factura_detalle->factura_id = $factura->id;
+                $factura_detalle->servicio_id = $servicio->servicio_id;
+                $factura_detalle->abono_mensual = $servicio->abono_mensual;
+
+                // Proporcional
+                $factura_detalle->abono_proporcional = $servicio->costo_proporcional_importe > 0 ? $servicio->costo_proporcional_importe : null;
+                $factura_detalle->dias_proporcional = $servicio->costo_proporcional_dias > 0 ? $servicio->costo_proporcional_dias : null;
+
+                $factura_detalle->instalacion_plan_pago = $servicio->plan_pago;
+
+                if ($servicio->pp_flag == 1) {
+                    $factura_detalle->costo_instalacion = $servicio->abono_mensual;
+                    $factura_detalle->instalacion_cuota = $servicio->costo_instalacion_cuotas_pagas + 1;
+                } else {
+                    $factura_detalle->costo_instalacion = $servicio->costo_instalacion_importe_pagar > 0 ? $servicio->costo_instalacion_importe_pagar : null;
+                    $factura_detalle->instalacion_cuota = $servicio->costo_instalacion_importe_pagar > 0 ? $servicio->costo_instalacion_cuotas_pagas + 1 : null;
+                }
+
+                $factura_detalle->pp_flag = $servicio->pp_flag;
+
+                if ($servicio->bonificacion_id != null) {
+                    $factura_detalle->iva_bonificacion = $servicio->iva_bonificacion;
+                    $factura_detalle->importe_bonificacion = $servicio->bonificacion_aplicada;
+                    $factura_detalle->bonificacion_detalle = $servicio->bonificacion_detalle;
+                }
+
+                // Calcular IVA para este servicio
+                $importe_servicio = 0;
+                if ($servicio->costo_proporcional_importe > 0) {
+                    $importe_servicio += $servicio->costo_proporcional_importe;
+                }
+                if ($servicio->costo_abono_pagar > 0) {
+                    $importe_servicio += $servicio->costo_abono_pagar;
+                }
+                if ($servicio->costo_instalacion_importe_pagar > 0) {
+                    $importe_servicio += $servicio->costo_instalacion_importe_pagar;
+                }
+                $factura_detalle->importe_iva = $importe_servicio > 0 ? round($importe_servicio * 0.21, 2) : 0;
+
+                $factura_detalle->save();
+            }
+
+            // Enviar email automático
+            try {
+                $request = new \Illuminate\Http\Request();
+                $request->merge(['fecha_emision' => $fecha_emision]);
+                $this->sendEmailFactura($request, $factura);
+            } catch (Exception $e) {
+                Log::error("Error enviando email automático para factura", [
+                    'factura_id' => $factura->id,
+                    'error' => $e->getMessage()
+                ]);
+            }
+
+            return $factura;
+        }
+
+        return null;
     }
 
 

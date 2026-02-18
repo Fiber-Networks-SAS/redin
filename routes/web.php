@@ -268,6 +268,10 @@ Route::group(['prefix' => 'admin'], function() {
 		// listar facturas sin PDF del período
 		Route::get('/period/missing-pdfs', 'BillController@listMissingPeriodPDFs');
 
+		// completar facturas faltantes
+		Route::get('/period/complete-missing', 'BillController@showCompleteMissingView');
+		Route::post('/period/verify-missing', 'BillController@verifyMissingBills');
+
 		// cancelar pago factura
 		Route::get('/period/bill-pay-cancel/{id}', 'BillController@getBillPayCancel');
 		Route::post('/period/bill-pay-cancel/{id}', 'BillController@getBillPayCancelPost');
@@ -335,6 +339,9 @@ Route::group(['prefix' => 'admin'], function() {
 		Route::post('/bill/regenerate-pdf/{id}', 'BillController@regenerateBillPDF');
 		// regenerar PDF múltiples facturas
 		Route::post('/bill/regenerate-pdf', 'BillController@regenerateBillPDF');
+
+		// completar facturas faltantes de un periodo (API)
+		Route::post('/bill/complete-missing', 'BillController@completeMissingBills');
 
 		// temp --------------------------------------------------------------------------------------
 
