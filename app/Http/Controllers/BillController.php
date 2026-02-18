@@ -3792,6 +3792,12 @@ class BillController extends Controller
             // ordeno los items por el atributo "domicilio"
             usort($items, array($this, "cmp_obj"));
 
+            // Inicializo el array de facturas
+            $facturas = [];
+
+            if (empty($items)) {
+                return redirect('/admin/bills/single')->with(['status' => 'danger', 'message' => 'El cliente no tiene servicios activos facturables para el período indicado.', 'icon' => 'fa-frown-o']);
+            }
 
             // Genero las Facturas
             foreach ($items as $item) {
