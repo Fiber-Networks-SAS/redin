@@ -1,0 +1,129 @@
+{
+  "info": {
+    "name": "Completar Facturas Faltantes",
+    "description": "Colección de Postman/Insomnia para el endpoint de completar facturas faltantes",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Completar Facturas - Periodo Enero 2026",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"periodo\": \"01/2026\",\n  \"fecha_emision\": \"04/02/2026\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost/bill/complete-missing",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "bill",
+            "complete-missing"
+          ]
+        },
+        "description": "Completa las facturas faltantes del periodo 01/2026"
+      },
+      "response": []
+    },
+    {
+      "name": "Completar Facturas - Periodo Diciembre 2025",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"periodo\": \"12/2025\",\n  \"fecha_emision\": \"05/01/2026\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost/bill/complete-missing",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "bill",
+            "complete-missing"
+          ]
+        },
+        "description": "Completa las facturas faltantes del periodo 12/2025"
+      },
+      "response": []
+    },
+    {
+      "name": "Completar Facturas - Validación Error Periodo",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"periodo\": \"2026-01\",\n  \"fecha_emision\": \"04/02/2026\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost/bill/complete-missing",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "bill",
+            "complete-missing"
+          ]
+        },
+        "description": "Prueba con formato de periodo inválido (debería retornar error 400)"
+      },
+      "response": []
+    },
+    {
+      "name": "Completar Facturas - Validación Error Fecha",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"periodo\": \"01/2026\",\n  \"fecha_emision\": \"2026-02-04\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost/bill/complete-missing",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "path": [
+            "bill",
+            "complete-missing"
+          ]
+        },
+        "description": "Prueba con formato de fecha inválido (debería retornar error 400)"
+      },
+      "response": []
+    }
+  ]
+}
