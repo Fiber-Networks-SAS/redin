@@ -789,6 +789,192 @@ class BillController extends Controller
     }
 
 
+    // ------------------------------------------------------------------
+    // NC DE CORRECCIÓN: emite NC en AFIP sin modificar la factura
+    // Endpoint interno — no figura en menú
+    // ------------------------------------------------------------------
+
+    public function getBillCorregir(Request $request, $id)
+    {
+        $factura = Factura::find($id);
+
+        if (!$factura) {
+            abort(404);
+        }
+
+        $factura->talonario;
+        $factura->talonario->nro_punto_vta = $this->zerofill($factura->talonario->nro_punto_vta, 4);
+        $factura->nro_factura = $this->zerofill($factura->nro_factura);
+        $factura->cliente;
+        $factura->fecha_emision   = Carbon::parse($factura->fecha_emision)->format('d/m/Y');
+        $factura->primer_vto_fecha  = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
+        $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
+        $factura->fecha_pago = $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null;
+
+        $detalles = $factura->detalle;
+        foreach ($detalles as $detalle) {
+            $detalle->servicio;
+        }
+
+        $notasCredito = $factura->notaCredito()->where('tipo', 'correccion')->get();
+
+        return View::make('period.view_factura_corregir')->with([
+            'factura'      => $factura,
+            'detalles'     => $detalles,
+            'notasCredito' => $notasCredito,
+        ]);
+    }
+
+    public function getBillCorregirPost(Request $request, $id)
+    {
+        $rules = [
+            'importe' => ['required', 'numeric', 'min:0.01'],
+            'motivo'  => ['required', 'string', 'max:500'],
+        ];
+
+        $validator = Validator::make($request->all(), $rules);
+
+        if ($validator->fails()) {
+            return back()->withInput()->withErrors($validator);
+        }
+
+        $factura = Factura::find($id);
+
+        if (!$factura) {
+            return back()->withInput()->with(['status' => 'danger', 'message' => 'Factura no encontrada.', 'icon' => 'fa-frown-o']);
+        }
+
+        $factura->talonario;
+
+        try {
+            if ($this->afipService === null) {
+                throw new \Exception('El servicio de AFIP no está disponible. Verifique la configuración de certificados.');
+            }
+
+            $importe    = $this->floatvalue($request->importe);
+            $ptoVta     = $factura->talonario->nro_punto_vta;
+            $nroFactura = $factura->nro_factura;
+            $letra      = $factura->talonario->letra;
+
+            $cbteTipo    = $letra == 'A' ? 3 : 8;
+            $lastVoucher = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+
+            if ($letra == 'A') {
+                // Limpiar CUIT: quitar guiones, espacios y caracteres no numéricos
+                $cuitLimpio = preg_replace('/\D/', '', (string) $factura->cliente->dni);
+
+                if (strlen($cuitLimpio) !== 11) {
+                    Log::error('NC Corrección - CUIT inválido para Factura A', [
+                        'dni_original' => $factura->cliente->dni,
+                        'cuit_limpio'  => $cuitLimpio,
+                        'cliente_id'   => $factura->cliente->id,
+                    ]);
+                    return back()->withInput()->with([
+                        'status'  => 'danger',
+                        'message' => 'El CUIT del cliente (' . $factura->cliente->firstname . ' ' . $factura->cliente->lastname . ') no es válido para emitir una NC tipo A. CUIT almacenado: "' . $factura->cliente->dni . '". Debe tener 11 dígitos.',
+                        'icon'    => 'fa-frown-o',
+                    ]);
+                }
+
+                $afipResponse = $this->afipService->notaCreditoA(
+                    $ptoVta,
+                    $cuitLimpio,
+                    $importe,
+                    $nroFactura
+                );
+            } else {
+                $afipResponse = $this->afipService->notaCreditoB(
+                    $ptoVta,
+                    $importe,
+                    $nroFactura
+                );
+            }
+
+            Log::info('NC Corrección - Respuesta AFIP', $afipResponse);
+
+            // Determinar número de voucher asignado
+            $nroNc = null;
+            if (!empty($afipResponse['CbteDesde'])) {
+                $nroNc = $afipResponse['CbteDesde'];
+            } elseif (!empty($afipResponse['CAE'])) {
+                // AFIP devolvió CAE pero no CbteDesde — intentar recuperar
+                $newLastVoucher = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+                if ($newLastVoucher > $lastVoucher) {
+                    $nroNc = $newLastVoucher;
+                    $afipResponse['CbteDesde'] = $nroNc;
+                }
+            }
+
+            if (empty($nroNc) || empty($afipResponse['CAE'])) {
+                Log::error('NC Corrección - AFIP no devolvió CAE/CbteDesde válido', $afipResponse);
+                return back()->withInput()->with([
+                    'status'  => 'danger',
+                    'message' => 'AFIP no autorizó la nota de crédito. Revise los logs para más detalles.',
+                    'icon'    => 'fa-frown-o',
+                ]);
+            }
+
+            // Parsear vencimiento CAE
+            $caeVto = null;
+            try {
+                if (!empty($afipResponse['CAEFchVto'])) {
+                    $raw    = $afipResponse['CAEFchVto'];
+                    $caeVto = (strlen($raw) == 8 && is_numeric($raw))
+                        ? Carbon::createFromFormat('Ymd', $raw)
+                        : Carbon::parse($raw);
+                }
+            } catch (\Exception $e) {
+                Log::error('NC Corrección - Error parseando CAEFchVto: ' . $e->getMessage());
+            }
+
+            // Calcular importes
+            $importeNeto = round($importe / 1.21, 2);
+            $importeIva  = round($importe - $importeNeto, 2);
+
+            $nota = new NotaCredito();
+            $nota->factura_id          = $factura->id;
+            $nota->talonario_id        = $factura->talonario_id;
+            $nota->nro_nota_credito    = $nroNc;
+            $nota->importe_bonificacion = $importeNeto;
+            $nota->importe_iva         = $importeIva;
+            $nota->importe_total       = round($importe, 2);
+            $nota->cae                 = $afipResponse['CAE'];
+            $nota->cae_vto             = $caeVto;
+            $nota->fecha_emision       = Carbon::now();
+            $nota->motivo              = $request->motivo;
+            $nota->nro_cliente         = $factura->nro_cliente;
+            $nota->periodo             = $factura->periodo;
+            $nota->tipo                = 'correccion';
+
+            if (!$nota->save()) {
+                Log::error('NC Corrección - Error al guardar NotaCredito', $nota->getAttributes());
+                return back()->withInput()->with([
+                    'status'  => 'danger',
+                    'message' => 'La nota de crédito fue autorizada por AFIP (CAE: ' . $afipResponse['CAE'] . ') pero no pudo guardarse en la base de datos.',
+                    'icon'    => 'fa-warning',
+                ]);
+            }
+
+            Log::info('NC Corrección - Nota de crédito guardada', ['nota_id' => $nota->id, 'nro_nc' => $nroNc]);
+
+            $nroNcFormateado = $letra . ' ' . $this->zerofill($ptoVta, 4) . '-' . $this->zerofill($nroNc);
+
+            return back()->with([
+                'status'  => 'success',
+                'message' => 'Nota de crédito de corrección ' . $nroNcFormateado . ' emitida en AFIP (CAE: ' . $afipResponse['CAE'] . '). La factura original NO fue modificada.',
+                'icon'    => 'fa-check',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('NC Corrección - Excepción: ' . $e->getMessage());
+            return back()->withInput()->with([
+                'status'  => 'danger',
+                'message' => 'Error al emitir la nota de crédito: ' . $e->getMessage(),
+                'icon'    => 'fa-frown-o',
+            ]);
+        }
+    }
+
     // actualizacion de factura
     public function getBillUpdate(Request $request, $id)
     {

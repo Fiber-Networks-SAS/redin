@@ -255,6 +255,10 @@ Route::group(['prefix' => 'admin'], function() {
 		Route::post('/period/bill-improve/{id}', 'BillController@getBillImprovePost');
 		Route::get('/period/bill-ampliar/{id}', 'BillController@getBillAmpliar');
 		Route::post('/period/bill-ampliar/{id}', 'BillController@getBillAmpliarPost');
+
+		// NC de corrección de error de facturación (interno — no listado en menú)
+		Route::get('/period/bill-corregir/{id}', 'BillController@getBillCorregir');
+		Route::post('/period/bill-corregir/{id}', 'BillController@getBillCorregirPost');
 		Route::get('/period/bill-update/{id}', 'BillController@getBillUpdate');
 		Route::post('/period/bill-update/{id}', 'BillController@getBillUpdatePost');
 		Route::get('/period/bill-pay/{id}', 'BillController@getBillPay');

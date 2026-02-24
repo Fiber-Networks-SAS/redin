@@ -24,7 +24,8 @@ class NotaCredito extends Model implements AuditableContract
         'fecha_emision',
         'motivo',
         'nro_cliente',
-        'periodo'
+        'periodo',
+        'tipo',
     ];
 
     protected $dates = [

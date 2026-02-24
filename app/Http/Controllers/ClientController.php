@@ -2250,7 +2250,8 @@ class ClientController extends Controller
                 : (string) $factura->importe_pago;
 
             $factura->fecha_pago = $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null;
-            $factura->forma_pago = $factura->fecha_pago ? $this->forma_pago[$factura->forma_pago] : '';
+            // proteger acceso a array forma_pago para evitar Undefined offset
+            $factura->forma_pago = ($factura->fecha_pago && isset($this->forma_pago[$factura->forma_pago])) ? $this->forma_pago[$factura->forma_pago] : '';
 
             $detalles =  $factura->detalle;
 
