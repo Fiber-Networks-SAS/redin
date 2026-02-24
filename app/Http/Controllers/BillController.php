@@ -4104,7 +4104,7 @@ class BillController extends Controller
                                 $factura->importe_total
                             );
                         } else {
-                            $afipResponse = $this->afipService->facturaB($talonario->nro_punto_vta, $item['cliente']->dni, $factura->importe_total);
+                            $afipResponse = $this->afipService->facturaB($talonario->nro_punto_vta, $factura->importe_total, $item['cliente']->dni);
                         }
 
 
