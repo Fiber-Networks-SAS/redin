@@ -975,6 +975,469 @@ class BillController extends Controller
         }
     }
 
+    // -----------------------------------------------------------------------
+    // HERRAMIENTA DE CORRECCIÓN AFIP (búsqueda libre + NC + factura nueva)
+    // -----------------------------------------------------------------------
+
+    public function getAfipCorreccion(Request $request)
+    {
+        $talonarios = Talonario::orderBy('letra')->orderBy('nro_punto_vta')->get(['id', 'letra', 'nro_punto_vta']);
+        return View::make('afip.correccion')->with([
+            'factura_id_inicial' => $request->has('factura_id') && $request->get('factura_id') ? (int) $request->get('factura_id') : null,
+            'talonarios'         => $talonarios,
+        ]);
+    }
+
+    public function getAfipCorreccionDetalle(Request $request, $id)
+    {
+        $factura = Factura::with(['talonario', 'cliente', 'detalle.servicio'])->find($id);
+
+        if (!$factura) {
+            return response()->json(['error' => 'Factura no encontrada'], 404);
+        }
+
+        $historial = $factura->notaCredito()
+            ->whereIn('tipo', ['correccion', 'factura_correctiva'])
+            ->orderBy('fecha_emision', 'desc')
+            ->get()
+            ->map(function ($h) use ($factura) {
+                return [
+                    'tipo'          => $h->tipo,
+                    'nro'           => $factura->talonario->letra . ' ' .
+                                       str_pad($factura->talonario->nro_punto_vta, 4, '0', STR_PAD_LEFT) . '-' .
+                                       str_pad($h->nro_nota_credito, 8, '0', STR_PAD_LEFT),
+                    'fecha'         => Carbon::parse($h->fecha_emision)->format('d/m/Y H:i'),
+                    'importe_total' => number_format($h->importe_total, 2, ',', '.'),
+                    'cae'           => $h->cae,
+                    'cae_vto'       => $h->cae_vto ? Carbon::parse($h->cae_vto)->format('d/m/Y') : '-',
+                    'motivo'        => $h->motivo,
+                ];
+            })->values();
+
+        return response()->json([
+            'id'               => $factura->id,
+            'letra'            => $factura->talonario->letra,
+            'nro_punto_vta'    => str_pad($factura->talonario->nro_punto_vta, 4, '0', STR_PAD_LEFT),
+            'nro_factura'      => str_pad($factura->nro_factura, 8, '0', STR_PAD_LEFT),
+            'periodo'          => $factura->periodo,
+            'fecha_emision'    => Carbon::parse($factura->fecha_emision)->format('d/m/Y'),
+            'cliente_nombre'   => $factura->cliente->firstname . ' ' . $factura->cliente->lastname,
+            'cliente_dni'      => $factura->cliente->dni,
+            'importe_subtotal' => number_format($factura->importe_subtotal, 2, ',', '.'),
+            'importe_total'    => number_format($factura->importe_total, 2, ',', '.'),
+            'cae'              => $factura->cae,
+            'fecha_pago'       => $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null,
+            'detalles'         => $factura->detalle->map(function ($d) {
+                return [
+                    'servicio' => $d->servicio->nombre ?? 'N/A',
+                    'importe'  => number_format($d->importe, 2, ',', '.'),
+                ];
+            })->values(),
+            'historial'        => $historial,
+        ]);
+    }
+
+    public function getAfipCorreccionBuscar(Request $request)
+    {
+        $q = trim($request->get('q', ''));
+
+        if (strlen($q) < 2) {
+            return response()->json([]);
+        }
+
+        // Buscar IDs de clientes coincidentes (evita orWhereHas por bug en Laravel antiguo)
+        $userIds = User::where(DB::raw("CONCAT(firstname, ' ', lastname)"), 'like', "%{$q}%")
+            ->orWhere('dni', 'like', "%{$q}%")
+            ->get(['id'])
+            ->pluck('id')
+            ->toArray();
+
+        $facturas = Factura::withTrashed()->with(['talonario', 'cliente'])
+            ->where(function ($query) use ($q, $userIds) {
+                if (is_numeric($q)) {
+                    $query->where('nro_factura', (int)$q);
+                    $query->orWhere('nro_cliente', (int)$q);
+                }
+                // Búsqueda por CAE (cadena numérica de 14 dígitos)
+                if (ctype_digit($q) && strlen($q) >= 6) {
+                    $query->orWhere('cae', $q);
+                }
+                if (!empty($userIds)) {
+                    $query->orWhereIn('user_id', $userIds);
+                }
+            })
+            ->orderBy('fecha_emision', 'desc')
+            ->limit(20)
+            ->get();
+
+        $results = $facturas->map(function ($f) {
+            $letra    = $f->talonario->letra ?? '?';
+            $pto      = $this->zerofill($f->talonario->nro_punto_vta, 4);
+            $nro      = $this->zerofill($f->nro_factura);
+            $nombre   = $f->cliente ? ($f->cliente->firstname . ' ' . $f->cliente->lastname) : 'N/A';
+            $anulada  = $f->trashed() ? ' [ANULADA]' : '';
+            return [
+                'id'      => $f->id,
+                'label'   => "Fact. {$letra} {$pto}-{$nro} — {$nombre} — \${$f->importe_total} ({$f->periodo}){$anulada}",
+                'periodo' => $f->periodo,
+                'cliente' => $nombre,
+                'anulada' => $f->trashed(),
+            ];
+        });
+
+        return response()->json($results);
+    }
+
+    public function postAfipCorreccionNC(Request $request, $id)
+    {
+        $rules = [
+            'importe' => ['required', 'numeric', 'min:0.01'],
+            'motivo'  => ['required', 'string', 'max:500'],
+        ];
+        $validator = Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            return redirect('/admin/afip-correccion?factura_id=' . $id)->withInput()->withErrors($validator)->with('tab', 'nc');
+        }
+
+        $factura = Factura::find($id);
+        if (!$factura) {
+            return redirect('/admin/afip-correccion')->with(['status' => 'danger', 'message' => 'Factura no encontrada.', 'icon' => 'fa-frown-o']);
+        }
+        $factura->talonario;
+
+        try {
+            if ($this->afipService === null) {
+                throw new \Exception('El servicio de AFIP no está disponible.');
+            }
+
+            $importe    = $this->floatvalue($request->importe);
+            $ptoVta     = $factura->talonario->nro_punto_vta;
+            $nroFactura = $factura->nro_factura;
+            $letra      = $factura->talonario->letra;
+            $cbteTipo   = $letra == 'A' ? 3 : 8;
+            $lastVoucher = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+
+            if ($letra == 'A') {
+                $cuitLimpio = preg_replace('/\D/', '', (string) $factura->cliente->dni);
+                if (strlen($cuitLimpio) !== 11) {
+                    return redirect('/admin/afip-correccion?factura_id=' . $factura->id)->with([
+                        'status'  => 'danger',
+                        'message' => 'CUIT inválido para Factura A: "' . $factura->cliente->dni . '". Debe tener 11 dígitos.',
+                        'icon'    => 'fa-frown-o',
+                        'tab'     => 'nc',
+                    ]);
+                }
+                $afipResponse = $this->afipService->notaCreditoA($ptoVta, $cuitLimpio, $importe, $nroFactura);
+            } else {
+                $dniManual = trim($request->get('dni', ''));
+                $dniManual = $dniManual !== '' ? preg_replace('/\D/', '', $dniManual) : null;
+                $afipResponse = $this->afipService->notaCreditoB($ptoVta, $importe, $nroFactura, $dniManual ?: null);
+            }
+
+            Log::info('AfipCorreccion NC - Respuesta AFIP', $afipResponse);
+
+            $nroNc = $afipResponse['CbteDesde'] ?? null;
+            if (empty($nroNc)) {
+                $newLast = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+                if ($newLast > $lastVoucher) {
+                    $nroNc = $newLast;
+                    $afipResponse['CbteDesde'] = $nroNc;
+                }
+            }
+
+            if (empty($nroNc) || empty($afipResponse['CAE'])) {
+                return redirect('/admin/afip-correccion?factura_id=' . $factura->id)->with(['status' => 'danger', 'message' => 'AFIP no autorizó la nota de crédito.', 'icon' => 'fa-frown-o', 'tab' => 'nc']);
+            }
+
+            $caeVto = null;
+            if (!empty($afipResponse['CAEFchVto'])) {
+                $raw    = $afipResponse['CAEFchVto'];
+                $caeVto = (strlen($raw) == 8 && is_numeric($raw))
+                    ? Carbon::createFromFormat('Ymd', $raw)
+                    : Carbon::parse($raw);
+            }
+
+            $importeNeto = round($importe / 1.21, 2);
+            $nota = new NotaCredito();
+            $nota->factura_id          = $factura->id;
+            $nota->talonario_id        = $factura->talonario_id;
+            $nota->nro_nota_credito    = $nroNc;
+            $nota->importe_bonificacion = $importeNeto;
+            $nota->importe_iva         = round($importe - $importeNeto, 2);
+            $nota->importe_total       = round($importe, 2);
+            $nota->cae                 = $afipResponse['CAE'];
+            $nota->cae_vto             = $caeVto;
+            $nota->fecha_emision       = Carbon::now();
+            $nota->motivo              = $request->motivo;
+            $nota->nro_cliente         = $factura->cliente->id;
+            $nota->periodo             = $factura->periodo;
+            $nota->tipo                = 'correccion';
+            $nota->save();
+
+            $nroFmt = $letra . ' ' . $this->zerofill($ptoVta, 4) . '-' . $this->zerofill($nroNc);
+            return redirect('/admin/afip-correccion?factura_id=' . $factura->id)->with([
+                'status'  => 'success',
+                'message' => "NC de corrección {$nroFmt} emitida en AFIP (CAE: {$afipResponse['CAE']}). La factura original NO fue modificada.",
+                'icon'    => 'fa-check',
+                'tab'     => 'nc',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('AfipCorreccion NC - Excepción: ' . $e->getMessage());
+            return redirect('/admin/afip-correccion?factura_id=' . $id)->with(['status' => 'danger', 'message' => 'Error: ' . $e->getMessage(), 'icon' => 'fa-frown-o', 'tab' => 'nc']);
+        }
+    }
+
+    public function postAfipCorreccionFactura(Request $request, $id)
+    {
+        $rules = [
+            'importe' => ['required', 'numeric', 'min:0.01'],
+            'motivo'  => ['required', 'string', 'max:500'],
+        ];
+        $validator = Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            return redirect('/admin/afip-correccion?factura_id=' . $id)->withInput()->withErrors($validator)->with('tab', 'factura');
+        }
+
+        $factura = Factura::find($id);
+        if (!$factura) {
+            return redirect('/admin/afip-correccion')->with(['status' => 'danger', 'message' => 'Factura no encontrada.', 'icon' => 'fa-frown-o']);
+        }
+        $factura->talonario;
+
+        try {
+            if ($this->afipService === null) {
+                throw new \Exception('El servicio de AFIP no está disponible.');
+            }
+
+            $importe = $this->floatvalue($request->importe);
+            $ptoVta  = $factura->talonario->nro_punto_vta;
+            $letra   = $factura->talonario->letra;
+            $cbteTipo = $letra == 'A' ? 1 : 6;
+            $lastVoucher = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+
+            if ($letra == 'A') {
+                $cuitLimpio = preg_replace('/\D/', '', (string) $factura->cliente->dni);
+                if (strlen($cuitLimpio) !== 11) {
+                    return redirect('/admin/afip-correccion?factura_id=' . $factura->id)->with([
+                        'status'  => 'danger',
+                        'message' => 'CUIT inválido para Factura A: "' . $factura->cliente->dni . '". Debe tener 11 dígitos.',
+                        'icon'    => 'fa-frown-o',
+                        'tab'     => 'factura',
+                    ]);
+                }
+                $afipResponse = $this->afipService->facturaA($ptoVta, $cuitLimpio, $importe);
+            } else {
+                $dniManual = trim($request->get('dni', ''));
+                $dniManual = $dniManual !== '' ? preg_replace('/\D/', '', $dniManual) : null;
+                $dniEfectivo = $dniManual ?: ($factura->cliente->dni ?? null);
+                $afipResponse = $this->afipService->facturaB($ptoVta, $importe, $dniEfectivo);
+            }
+
+            Log::info('AfipCorreccion Factura - Respuesta AFIP', $afipResponse);
+
+            $nroFactNueva = $afipResponse['CbteDesde'] ?? null;
+            if (empty($nroFactNueva)) {
+                $newLast = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+                if ($newLast > $lastVoucher) {
+                    $nroFactNueva = $newLast;
+                    $afipResponse['CbteDesde'] = $nroFactNueva;
+                }
+            }
+
+            if (empty($nroFactNueva) || empty($afipResponse['CAE'])) {
+                return redirect('/admin/afip-correccion?factura_id=' . $factura->id)->with(['status' => 'danger', 'message' => 'AFIP no autorizó la factura.', 'icon' => 'fa-frown-o', 'tab' => 'factura']);
+            }
+
+            $caeVto = null;
+            if (!empty($afipResponse['CAEFchVto'])) {
+                $raw    = $afipResponse['CAEFchVto'];
+                $caeVto = (strlen($raw) == 8 && is_numeric($raw))
+                    ? Carbon::createFromFormat('Ymd', $raw)
+                    : Carbon::parse($raw);
+            }
+
+            // Guardar en notas_credito como tipo 'factura_correctiva' (tracking sin impacto en facturación)
+            $importeNeto = round($importe / 1.21, 2);
+            $nota = new NotaCredito();
+            $nota->factura_id          = $factura->id;
+            $nota->talonario_id        = $factura->talonario_id;
+            $nota->nro_nota_credito    = $nroFactNueva;
+            $nota->importe_bonificacion = $importeNeto;
+            $nota->importe_iva         = round($importe - $importeNeto, 2);
+            $nota->importe_total       = round($importe, 2);
+            $nota->cae                 = $afipResponse['CAE'];
+            $nota->cae_vto             = $caeVto;
+            $nota->fecha_emision       = Carbon::now();
+            $nota->motivo              = $request->motivo;
+            $nota->nro_cliente         = $factura->cliente->id;
+            $nota->periodo             = $factura->periodo;
+            $nota->tipo                = 'factura_correctiva';
+            $nota->save();
+
+            $nroFmt = $letra . ' ' . $this->zerofill($ptoVta, 4) . '-' . $this->zerofill($nroFactNueva);
+            return redirect('/admin/afip-correccion?factura_id=' . $factura->id)->with([
+                'status'  => 'success',
+                'message' => "Factura correctiva {$nroFmt} emitida en AFIP (CAE: {$afipResponse['CAE']}). No se modificó ningún registro de facturación.",
+                'icon'    => 'fa-check',
+                'tab'     => 'factura',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('AfipCorreccion Factura - Excepción: ' . $e->getMessage());
+            return redirect('/admin/afip-correccion?factura_id=' . $id)->with(['status' => 'danger', 'message' => 'Error: ' . $e->getMessage(), 'icon' => 'fa-frown-o', 'tab' => 'factura']);
+        }
+    }
+
+    /**
+     * Emite una Nota de Crédito en AFIP para una factura que NO existe en el sistema.
+     * Útil para corregir comprobantes emitidos pero no guardados en la BD.
+     */
+    public function postAfipCorreccionNCManual(Request $request)
+    {
+        $rules = [
+            'talonario_id'       => ['required', 'integer', 'exists:talonarios,id'],
+            'nro_factura_orig'   => ['required', 'integer', 'min:1'],
+            'importe'            => ['required', 'numeric', 'min:0.01'],
+            'motivo'             => ['required', 'string', 'max:500'],
+            'dni'                => ['nullable', 'string', 'max:20'],
+        ];
+        $validator = Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            return redirect('/admin/afip-correccion')
+                ->withInput()
+                ->withErrors($validator)
+                ->with('tab_manual', true);
+        }
+
+        $talonario = Talonario::find((int) $request->get('talonario_id'));
+        $letra     = $talonario->letra;
+        $ptoVta    = $talonario->nro_punto_vta;
+        $nroOrig   = (int) $request->get('nro_factura_orig');
+        $importe   = $this->floatvalue($request->importe);
+
+        try {
+            if ($this->afipService === null) {
+                throw new \Exception('El servicio de AFIP no está disponible.');
+            }
+
+            $cbteTipo    = $letra === 'A' ? 3 : 8;
+            $lastVoucher = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+
+            if ($letra === 'A') {
+                $cuit = preg_replace('/\D/', '', trim($request->get('dni', '')));
+                if (strlen($cuit) !== 11) {
+                    return redirect('/admin/afip-correccion')
+                        ->withInput()
+                        ->with(['status' => 'danger', 'message' => 'Para NC tipo A se requiere CUIT de 11 dígitos.', 'icon' => 'fa-frown-o', 'tab_manual' => true]);
+                }
+                $afipResponse = $this->afipService->notaCreditoA($ptoVta, $cuit, $importe, $nroOrig);
+            } else {
+                $dniManual = trim($request->get('dni', ''));
+                $dniManual = $dniManual !== '' ? preg_replace('/\D/', '', $dniManual) : null;
+                $afipResponse = $this->afipService->notaCreditoB($ptoVta, $importe, $nroOrig, $dniManual ?: null);
+            }
+
+            Log::info('AfipCorreccion NCManual - Respuesta AFIP', $afipResponse);
+
+            $nroNc = $afipResponse['CbteDesde'] ?? null;
+            if (empty($nroNc)) {
+                $newLast = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+                if ($newLast > $lastVoucher) {
+                    $nroNc = $newLast;
+                    $afipResponse['CbteDesde'] = $nroNc;
+                }
+            }
+
+            if (empty($nroNc) || empty($afipResponse['CAE'])) {
+                return redirect('/admin/afip-correccion')
+                    ->withInput()
+                    ->with(['status' => 'danger', 'message' => 'AFIP no autorizó la nota de crédito manual.', 'icon' => 'fa-frown-o', 'tab_manual' => true]);
+            }
+
+            $nroFmt = $letra . ' ' . $this->zerofill($ptoVta, 4) . '-' . $this->zerofill($nroNc);
+            return redirect('/admin/afip-correccion')->with([
+                'status'  => 'success',
+                'message' => "NC manual {$nroFmt} emitida en AFIP (CAE: {$afipResponse['CAE']}). Factura original referenciada: {$letra} {$this->zerofill($ptoVta,4)}-{$this->zerofill($nroOrig)}.",
+                'icon'    => 'fa-check',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('AfipCorreccion NCManual - Excepción: ' . $e->getMessage());
+            return redirect('/admin/afip-correccion')
+                ->withInput()
+                ->with(['status' => 'danger', 'message' => 'Error: ' . $e->getMessage(), 'icon' => 'fa-frown-o', 'tab_manual' => true]);
+        }
+    }
+
+    /**
+     * Emite una Factura en AFIP sin crear ningún registro en el sistema.
+     * Útil para cerrar balances con comprobantes que no deben impactar en la BD.
+     */
+    public function postAfipCorreccionFacturaManual(Request $request)
+    {
+        $rules = [
+            'talonario_id' => ['required', 'integer', 'exists:talonarios,id'],
+            'importe'      => ['required', 'numeric', 'min:0.01'],
+            'motivo'       => ['required', 'string', 'max:500'],
+            'dni'          => ['nullable', 'string', 'max:20'],
+        ];
+        $validator = Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            return redirect('/admin/afip-correccion')
+                ->withInput()
+                ->withErrors($validator)
+                ->with('tab_factura_manual', true);
+        }
+
+        $talonario = Talonario::find((int) $request->get('talonario_id'));
+        $letra     = $talonario->letra;
+        $ptoVta    = $talonario->nro_punto_vta;
+        $importe   = $this->floatvalue($request->importe);
+
+        try {
+            if ($this->afipService === null) {
+                throw new \Exception('El servicio de AFIP no está disponible.');
+            }
+
+            if ($letra === 'A') {
+                $cuit = preg_replace('/\D/', '', trim($request->get('dni', '')));
+                if (strlen($cuit) !== 11) {
+                    return redirect('/admin/afip-correccion')
+                        ->withInput()
+                        ->with(['status' => 'danger', 'message' => 'Para Factura A se requiere CUIT de 11 dígitos.', 'icon' => 'fa-frown-o', 'tab_factura_manual' => true]);
+                }
+                $afipResponse = $this->afipService->facturaA($ptoVta, $cuit, $importe);
+            } else {
+                $dniManual = trim($request->get('dni', ''));
+                $dniManual = $dniManual !== '' ? preg_replace('/\D/', '', $dniManual) : null;
+                $afipResponse = $this->afipService->facturaB($ptoVta, $importe, $dniManual ?: null);
+            }
+
+            Log::info('AfipCorreccion FacturaManual - Respuesta AFIP', $afipResponse);
+
+            if (empty($afipResponse['CAE'])) {
+                return redirect('/admin/afip-correccion')
+                    ->withInput()
+                    ->with(['status' => 'danger', 'message' => 'AFIP no autorizó la factura manual.', 'icon' => 'fa-frown-o', 'tab_factura_manual' => true]);
+            }
+
+            $nroFact = $afipResponse['CbteDesde'] ?? '?';
+            $nroFmt  = $letra . ' ' . $this->zerofill($ptoVta, 4) . '-' . $this->zerofill($nroFact);
+            return redirect('/admin/afip-correccion')->with([
+                'status'  => 'success',
+                'message' => "Factura manual {$nroFmt} emitida en AFIP (CAE: {$afipResponse['CAE']}). No se creó ningún registro en el sistema.",
+                'icon'    => 'fa-check',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('AfipCorreccion FacturaManual - Excepción: ' . $e->getMessage());
+            return redirect('/admin/afip-correccion')
+                ->withInput()
+                ->with(['status' => 'danger', 'message' => 'Error: ' . $e->getMessage(), 'icon' => 'fa-frown-o', 'tab_factura_manual' => true]);
+        }
+    }
+
     // actualizacion de factura
     public function getBillUpdate(Request $request, $id)
     {
@@ -6592,6 +7055,130 @@ class BillController extends Controller
 
 
             return response()->json($response, 500);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Notas de Crédito - PDF
+    // -------------------------------------------------------------------------
+
+    public function showNotasCreditoPDFView(Request $request)
+    {
+        $periodos = NotaCredito::select('periodo')
+            ->distinct()
+            ->orderBy('periodo', 'desc')
+            ->pluck('periodo');
+
+        $notasCredito = [];
+
+        $periodoSeleccionado = $request->get('periodo');
+        $clienteSearch       = $request->get('cliente');
+
+        if ($periodoSeleccionado || $clienteSearch) {
+            $query = NotaCredito::with(['talonario', 'factura.cliente']);
+
+            if ($periodoSeleccionado) {
+                $query->where('periodo', $periodoSeleccionado);
+            }
+
+            if ($clienteSearch) {
+                $query->where('nro_cliente', 'LIKE', '%' . $clienteSearch . '%');
+            }
+
+            $ncs = $query->orderBy('id', 'desc')->get();
+
+            foreach ($ncs as $nc) {
+                $ptovta   = $this->zerofill($nc->talonario->nro_punto_vta, 4);
+                $nroNc    = $this->zerofill($nc->nro_nota_credito);
+                $filename = $ptovta . '-' . $nroNc;
+                $filePath = public_path(config('constants.folder_notas_credito_pdf') . 'nc-' . $filename . '.pdf');
+                $hasPDF   = file_exists($filePath);
+
+                $cliente = $nc->factura && $nc->factura->cliente
+                    ? $nc->factura->cliente->firstname . ' ' . $nc->factura->cliente->lastname
+                    : 'N/A';
+
+                $notasCredito[] = [
+                    'id'           => $nc->id,
+                    'numero'       => $nc->talonario->letra . ' ' . $ptovta . '-' . $nroNc,
+                    'cliente'      => $cliente,
+                    'nro_cliente'  => $nc->nro_cliente,
+                    'periodo'      => $nc->periodo,
+                    'importe_total'=> number_format($nc->importe_total, 2, ',', '.'),
+                    'cae'          => $nc->cae,
+                    'fecha_emision'=> Carbon::parse($nc->fecha_emision)->format('d/m/Y'),
+                    'motivo'       => $nc->motivo,
+                    'tipo'         => $nc->tipo,
+                    'has_pdf'      => $hasPDF,
+                    'filename'     => $filename,
+                ];
+            }
+        }
+
+        return View::make('notas_credito.pdf')->with([
+            'periodos'            => $periodos,
+            'notasCredito'        => $notasCredito,
+            'periodoSeleccionado' => $periodoSeleccionado,
+            'clienteSearch'       => $clienteSearch,
+        ]);
+    }
+
+    public function generateNotaCreditoPDF(Request $request, $id = null)
+    {
+        $ncId = $id ?: (int) $request->get('nc_id');
+
+        if (!$ncId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'ID de nota de crédito requerido.',
+            ], 400);
+        }
+
+        $nc = NotaCredito::with(['talonario', 'factura.cliente'])->find($ncId);
+
+        if (!$nc) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Nota de Crédito no encontrada.',
+            ], 404);
+        }
+
+        try {
+            $ptovta   = $this->zerofill($nc->talonario->nro_punto_vta, 4);
+            $nroNc    = $this->zerofill($nc->nro_nota_credito);
+            $filename = $ptovta . '-' . $nroNc;
+            $filePath = public_path(config('constants.folder_notas_credito_pdf') . 'nc-' . $filename . '.pdf');
+
+            $directory = dirname($filePath);
+            if (!file_exists($directory)) {
+                mkdir($directory, 0755, true);
+            }
+
+            $pdf = PDF::loadView('pdf.nota_credito', ['notasCredito' => [$nc]]);
+            $pdf->save($filePath);
+
+            $publicUrl = $request->root() . '/' . config('constants.folder_notas_credito_pdf') . 'nc-' . $filename . '.pdf';
+
+            Log::info('PDF de Nota de Crédito generado', ['nc_id' => $nc->id, 'filename' => 'nc-' . $filename . '.pdf']);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'PDF generado exitosamente.',
+                'data'    => [
+                    'nc_id'      => $nc->id,
+                    'numero'     => $nc->talonario->letra . ' ' . $ptovta . '-' . $nroNc,
+                    'public_url' => $publicUrl,
+                    'filename'   => 'nc-' . $filename . '.pdf',
+                ],
+            ]);
+
+        } catch (Exception $e) {
+            Log::error('Error generando PDF de NC ID: ' . $ncId, ['error' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al generar el PDF: ' . $e->getMessage(),
+            ], 500);
         }
     }
 

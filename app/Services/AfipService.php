@@ -303,21 +303,23 @@ class AfipService
     /**
      * Nota de Cr�dito B
      */
-    public function notaCreditoB($ptoVta, $importe, $nroFacturaAsociada)
+    public function notaCreditoB($ptoVta, $importe, $nroFacturaAsociada, $dni = null)
     {
         $lastVoucher = $this->getLastVoucher($ptoVta, 8);
         $importeTotal = round($importe, 2);
         $importeNeto = round($importe / 1.21, 2);
         $importeIVA = round($importeTotal - $importeNeto, 2);
         $baseImponibleIVA = round($importeTotal, 2);
+        $docTipoFinal = $dni ? 96 : 99; // 96 = DNI, 99 = Consumidor Final
+        $docNroFinal  = $dni ? \intval($dni) : 0;
 
         $data = [
             'CantReg'   => 1,
             'PtoVta'    => $ptoVta,
-            'CbteTipo'  => 8, // Nota de Cr�dito B
+            'CbteTipo'  => 8, // Nota de Crédito B
             'Concepto'  => 2,
-            'DocTipo'   => 99, // Consumidor Final
-            'DocNro'    => 0,
+            'DocTipo'   => $docTipoFinal,
+            'DocNro'    => $docNroFinal,
             'CbteDesde' => $lastVoucher + 1,
             'CbteHasta' => $lastVoucher + 1,
             'CbteFch'   => intval(date('Ymd')),
