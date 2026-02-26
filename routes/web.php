@@ -259,6 +259,15 @@ Route::group(['prefix' => 'admin'], function() {
 		// NC de corrección de error de facturación (interno — no listado en menú)
 		Route::get('/period/bill-corregir/{id}', 'BillController@getBillCorregir');
 		Route::post('/period/bill-corregir/{id}', 'BillController@getBillCorregirPost');
+
+		// Herramienta de corrección AFIP (búsqueda libre + NC + factura nueva)
+		Route::get('/afip-correccion', 'BillController@getAfipCorreccion');
+		Route::get('/afip-correccion/buscar', 'BillController@getAfipCorreccionBuscar');
+		Route::get('/afip-correccion/{id}/detalle', 'BillController@getAfipCorreccionDetalle');
+		Route::post('/afip-correccion/{id}/nc', 'BillController@postAfipCorreccionNC');
+		Route::post('/afip-correccion/{id}/factura', 'BillController@postAfipCorreccionFactura');
+		Route::post('/afip-correccion/nc-manual', 'BillController@postAfipCorreccionNCManual');
+		Route::post('/afip-correccion/factura-manual', 'BillController@postAfipCorreccionFacturaManual');
 		Route::get('/period/bill-update/{id}', 'BillController@getBillUpdate');
 		Route::post('/period/bill-update/{id}', 'BillController@getBillUpdatePost');
 		Route::get('/period/bill-pay/{id}', 'BillController@getBillPay');
@@ -343,6 +352,11 @@ Route::group(['prefix' => 'admin'], function() {
 		Route::post('/bill/regenerate-pdf/{id}', 'BillController@regenerateBillPDF');
 		// regenerar PDF múltiples facturas
 		Route::post('/bill/regenerate-pdf', 'BillController@regenerateBillPDF');
+
+		// PDFs de Notas de Crédito
+		Route::get('/notas-credito/pdf-view', 'BillController@showNotasCreditoPDFView');
+		Route::post('/nota-credito/generate-pdf/{id}', 'BillController@generateNotaCreditoPDF');
+		Route::post('/nota-credito/generate-pdf', 'BillController@generateNotaCreditoPDF');
 
 		// completar facturas faltantes de un periodo (API)
 		Route::post('/bill/complete-missing', 'BillController@completeMissingBills');

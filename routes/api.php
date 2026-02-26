@@ -50,6 +50,10 @@ Route::post('bill/regenerate-pdf/{id}', 'BillController@regenerateBillPDF');
 // regenerar PDF múltiples facturas
 Route::post('bill/regenerate-pdf', 'BillController@regenerateBillPDF');
 
+// generar PDF de Nota de Crédito
+Route::post('nota-credito/generate-pdf/{id}', 'BillController@generateNotaCreditoPDF');
+Route::post('nota-credito/generate-pdf', 'BillController@generateNotaCreditoPDF');
+
 // get user profile
 // Route::post('users/profile', 'ApiController@profile');
 

@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(ls /d/nbaslini/Desktop/dev/redin/app/*.php)",
+      "Bash(find /d/nbaslini/Desktop/dev/redin/resources/views -name \"*.blade.php\" -exec grep -l \"bill-improve\\\\|bill-corregir\" {} ;)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\nbaslini\\.claude\\projects\\d--nbaslini-Desktop-dev-redin\\memory"
     ]
   }
 }

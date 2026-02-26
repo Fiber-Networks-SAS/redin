@@ -44,6 +44,8 @@ return [
 	'folder_balance_detalle_pdf' => 'pdf_balance_detalle/',
 	'folder_balance_detalle_xls' => 'xls_balance_detalle/',
 
-	
+	'folder_notas_credito_pdf'   => 'pdf_notas_credito/',
+
+
 ];
 
