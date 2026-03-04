@@ -634,9 +634,9 @@ class BillController extends Controller
                         $nota->factura_id = $factura->id;
                         $nota->talonario_id = $factura->talonario_id;
                         $nota->nro_nota_credito = $afipResponse['CbteDesde'];
-                        $nota->importe_bonificacion = $this->floatvalue($request->importe_bonificacion);
-                        $nota->importe_iva = $this->floatvalue($request->importe_bonificacion) * 0.21;
-                        $nota->importe_total = $this->floatvalue($request->importe_bonificacion) * 1.21;
+                        $nota->importe_bonificacion = round($this->floatvalue($request->importe_bonificacion) / 1.21, 2);
+                        $nota->importe_iva = round($this->floatvalue($request->importe_bonificacion) - $this->floatvalue($request->importe_bonificacion) / 1.21, 2);
+                        $nota->importe_total = round($this->floatvalue($request->importe_bonificacion), 2);
                         $nota->cae = isset($afipResponse['CAE']) ? $afipResponse['CAE'] : null;
                         try {
                             if (isset($afipResponse['CAEFchVto'])) {
@@ -695,9 +695,9 @@ class BillController extends Controller
                                 $nota->factura_id = $factura->id;
                                 $nota->talonario_id = $factura->talonario_id;
                                 $nota->nro_nota_credito = $newLastVoucher;
-                                $nota->importe_bonificacion = $this->floatvalue($request->importe_bonificacion);
-                                $nota->importe_iva = $this->floatvalue($request->importe_bonificacion) * 0.21;
-                                $nota->importe_total = $this->floatvalue($request->importe_bonificacion) * 1.21;
+                                $nota->importe_bonificacion = round($this->floatvalue($request->importe_bonificacion) / 1.21, 2);
+                                $nota->importe_iva = round($this->floatvalue($request->importe_bonificacion) - $this->floatvalue($request->importe_bonificacion) / 1.21, 2);
+                                $nota->importe_total = round($this->floatvalue($request->importe_bonificacion), 2);
                                 $nota->cae = isset($afipResponse['CAE']) ? $afipResponse['CAE'] : null;
                                 try {
                                     if (isset($afipResponse['CAEFchVto'])) {
@@ -2022,7 +2022,7 @@ class BillController extends Controller
                         $servicio->bonificacion_id = $bonificacion->id;
                         $servicio->bonificacion_detalle = $bonificacion->descripcion ? $bonificacion->descripcion : 'Bonificacion aplicada al servicio';
                         $servicio->bonificacion_porcentaje = $bonificacion->porcentaje_bonificacion;
-                        $servicio->iva_bonificacion = $descuento_servicio * 0.21;
+                        $servicio->iva_bonificacion = $descuento_servicio - round($descuento_servicio / 1.21, 2);
                     } else {
                         $servicio->bonificacion_aplicada = 0;
                         $servicio->bonificacion_id = null;
@@ -2033,9 +2033,9 @@ class BillController extends Controller
                     $subtotal += $importe_servicio;
                 }
                 //Calculo de IVA
-                $iva_subtotal = ($subtotal) * 0.21;
-                $iva_bonificacion = ($bonificacion_total) * 0.21;
-                $iva = ($subtotal - $bonificacion_total) * 0.21;
+                $iva_subtotal = $subtotal - round($subtotal / 1.21, 2);
+                $iva_bonificacion = $bonificacion_total - round($bonificacion_total / 1.21, 2);
+                $iva = ($subtotal - $bonificacion_total) - round(($subtotal - $bonificacion_total) / 1.21, 2);
                 // Cabecera
                 $factura = new Factura;
                 $factura->user_id = $item['cliente']->id;
@@ -2416,7 +2416,7 @@ class BillController extends Controller
                             $importe_servicio += $servicio->costo_instalacion_importe_pagar;
                         }
                         // El IVA se calcula solo si el importe es mayor a cero
-                        $factura_detalle->importe_iva = $importe_servicio > 0 ? round($importe_servicio * 0.21, 2) : 0;
+                        $factura_detalle->importe_iva = $importe_servicio > 0 ? round($importe_servicio - $importe_servicio / 1.21, 2) : 0;
 
 
                         // guardo el detalle de la factura
@@ -4478,7 +4478,7 @@ class BillController extends Controller
                         $servicio->bonificacion_id = $bonificacion->id;
                         $servicio->bonificacion_detalle = $bonificacion->descripcion ? $bonificacion->descripcion : 'Bonificacion aplicada al servicio';
                         $servicio->bonificacion_porcentaje = $bonificacion->porcentaje_bonificacion;
-                        $servicio->iva_bonificacion = $descuento_servicio * 0.21;
+                        $servicio->iva_bonificacion = $descuento_servicio - round($descuento_servicio / 1.21, 2);
                     } else {
                         $servicio->bonificacion_aplicada = 0;
                         $servicio->bonificacion_id = null;
@@ -4489,9 +4489,9 @@ class BillController extends Controller
                     $subtotal += $importe_servicio;
                 }
                 //Calculo de IVA
-                $iva_subtotal = ($subtotal) * 0.21;
-                $iva_bonificacion = ($bonificacion_total) * 0.21;
-                $iva = ($subtotal - $bonificacion_total) * 0.21;
+                $iva_subtotal = $subtotal - round($subtotal / 1.21, 2);
+                $iva_bonificacion = $bonificacion_total - round($bonificacion_total / 1.21, 2);
+                $iva = ($subtotal - $bonificacion_total) - round(($subtotal - $bonificacion_total) / 1.21, 2);
                 // Cabecera
                 $factura = new Factura;
                 $factura->user_id = $item['cliente']->id;
@@ -4664,7 +4664,7 @@ class BillController extends Controller
                             $importe_servicio -= $servicio->bonificacion_aplicada;
                         }
                         // El IVA se calcula solo si el importe es mayor a cero
-                        $factura_detalle->importe_iva = $importe_servicio > 0 ? round($importe_servicio * 0.21, 2) : 0;
+                        $factura_detalle->importe_iva = $importe_servicio > 0 ? round($importe_servicio - $importe_servicio / 1.21, 2) : 0;
 
 
                         // guardo el detalle de la factura
@@ -5748,7 +5748,7 @@ class BillController extends Controller
                 $servicio->bonificacion_id = $bonificacion->id;
                 $servicio->bonificacion_detalle = $bonificacion->descripcion ? $bonificacion->descripcion : 'Bonificacion aplicada al servicio';
                 $servicio->bonificacion_porcentaje = $bonificacion->porcentaje_bonificacion;
-                $servicio->iva_bonificacion = $descuento_servicio * 0.21;
+                $servicio->iva_bonificacion = $descuento_servicio - $descuento_servicio / 1.21;
             } else {
                 $servicio->bonificacion_aplicada = 0;
                 $servicio->bonificacion_id = null;
@@ -5759,9 +5759,9 @@ class BillController extends Controller
         }
 
         // Cálculo de IVA
-        $iva_subtotal = ($subtotal) * 0.21;
-        $iva_bonificacion = ($bonificacion_total) * 0.21;
-        $iva = ($subtotal - $bonificacion_total) * 0.21;
+        $iva_subtotal = $subtotal - $subtotal / 1.21;
+        $iva_bonificacion = $bonificacion_total - $bonificacion_total / 1.21;
+        $iva = ($subtotal - $bonificacion_total) - ($subtotal - $bonificacion_total) / 1.21;
 
         // Crear cabecera de factura
         $factura = new Factura;
@@ -5972,7 +5972,7 @@ class BillController extends Controller
                 if ($servicio->costo_instalacion_importe_pagar > 0) {
                     $importe_servicio += $servicio->costo_instalacion_importe_pagar;
                 }
-                $factura_detalle->importe_iva = $importe_servicio > 0 ? round($importe_servicio * 0.21, 2) : 0;
+                $factura_detalle->importe_iva = $importe_servicio > 0 ? round($importe_servicio - $importe_servicio / 1.21, 2) : 0;
 
                 $factura_detalle->save();
             }

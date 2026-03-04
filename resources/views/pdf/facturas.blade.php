@@ -401,9 +401,9 @@
                 <tr>
                     <td class="left">Convenio de Pago - Servicio {{ $detalle->servicio->nombre }} (Cuota
                         {{ $detalle->instalacion_cuota . '/' . $detalle->instalacion_plan_pago }})</td>
-                    <td class="right">{{ safe_number_format(clean_number($detalle->costo_instalacion) * 0.79) }}</td>
+                    <td class="right">{{ safe_number_format(clean_number($detalle->costo_instalacion) / 1.21) }}</td>
                     <td class="right">21%</td>
-                    <td class="right">{{ safe_number_format(clean_number($detalle->costo_instalacion) * 0.21) }}</td>
+                    <td class="right">{{ safe_number_format(clean_number($detalle->costo_instalacion) - clean_number($detalle->costo_instalacion) / 1.21) }}</td>
                     <td class="right">{{ safe_number_format($detalle->costo_instalacion) }}</td>
                 </tr>
                 </td>
@@ -434,8 +434,8 @@
                         }
                         
                         // Calcular Neto e IVA correctamente
-                        $importe_neto = clean_number($fila_importe) - clean_number($fila_importe) * 0.21;
-                        $importe_iva = clean_number($fila_importe) * 0.21;
+                        $importe_neto = clean_number($fila_importe) / 1.21;
+                        $importe_iva = clean_number($fila_importe) - clean_number($fila_importe) / 1.21;
                         ?>
                         {{-- Normal --}}
                 <tr>
@@ -449,7 +449,7 @@
                 <?php if ($detalle->bonificacion_detalle != null && $detalle->importe_bonificacion > 0): ?>
                 <?php
                 // Calcular Neto e IVA para bonificación
-                $bonif_neto = clean_number($detalle->importe_bonificacion) * 0.79;
+                $bonif_neto = clean_number($detalle->importe_bonificacion) / 1.21;
                 $bonif_iva = clean_number($detalle->importe_bonificacion) - $bonif_neto;
                 ?>
                 <tr>
@@ -465,9 +465,9 @@
                 <tr>
                     <td class="left"> *Costo de Instalación (Cuota
                         {{ $detalle->instalacion_cuota . '/' . $detalle->instalacion_plan_pago }})</td>
-                    <td class="right">${{ safe_number_format(clean_number($detalle->costo_instalacion) * 0.79) }}</td>
+                    <td class="right">${{ safe_number_format(clean_number($detalle->costo_instalacion) / 1.21) }}</td>
                     <td class="right">21%</td>
-                    <td class="right">${{ safe_number_format(clean_number($detalle->costo_instalacion) * 0.21) }}</td>
+                    <td class="right">${{ safe_number_format(clean_number($detalle->costo_instalacion) - clean_number($detalle->costo_instalacion) / 1.21) }}</td>
                     <td class="right">${{ safe_number_format($detalle->costo_instalacion) }}</td>
                 </tr>
                 <?php endif; ?>
@@ -485,9 +485,9 @@
                         <td class="detalle_row" colspan="5">
                     <tr>
                         <td class="left">Bonificación: {{ $bonificacion->descripcion }}</td>
-                        <td class="right">-${{ safe_number_format($bonificacion->importe * 0.79) }}</td>
+                        <td class="right">-${{ safe_number_format($bonificacion->importe / 1.21) }}</td>
                         <td class="right">21%</td>
-                        <td class="right">-${{ safe_number_format($bonificacion->importe * 0.21) }}</td>
+                        <td class="right">-${{ safe_number_format($bonificacion->importe - $bonificacion->importe / 1.21) }}</td>
                         <td class="right">-${{ safe_number_format($bonificacion->importe) }}</td>
                     </tr>
                     </td>
