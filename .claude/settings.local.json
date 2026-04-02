@@ -3,7 +3,8 @@
     "allow": [
       "Bash(grep:*)",
       "Bash(ls /d/nbaslini/Desktop/dev/redin/app/*.php)",
-      "Bash(find /d/nbaslini/Desktop/dev/redin/resources/views -name \"*.blade.php\" -exec grep -l \"bill-improve\\\\|bill-corregir\" {} ;)"
+      "Bash(find /d/nbaslini/Desktop/dev/redin/resources/views -name \"*.blade.php\" -exec grep -l \"bill-improve\\\\|bill-corregir\" {} ;)",
+      "Bash(\"C:\\\\dev-tools\\\\bin\\\\php74.bat\" vendor/phpunit/phpunit/phpunit tests/Unit/NotaDebitoCorrectionTest.php tests/Unit/AnularFacturaTest.php --colors=never)"
     ],
     "additionalDirectories": [
       "C:\\Users\\nbaslini\\.claude\\projects\\d--nbaslini-Desktop-dev-redin\\memory"

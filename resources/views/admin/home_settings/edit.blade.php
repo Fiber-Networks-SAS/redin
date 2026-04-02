@@ -27,6 +27,7 @@
                             <li><a href="#company" role="tab" data-toggle="tab">La Empresa</a></li>
                             <li><a href="#internet" role="tab" data-toggle="tab">Internet</a></li>
                             <li><a href="#contact" role="tab" data-toggle="tab">Contacto</a></li>
+                            <li><a href="#planes-web" role="tab" data-toggle="tab">Planes Web</a></li>
                         </ul>
                         <div class="tab-content" style="padding:20px 0;">
                             <div class="tab-pane fade in active" id="slider">
@@ -126,6 +127,50 @@
                                         <textarea class="form-control" id="contact_text" name="contact_text" rows="3">{{ isset($settings['contact_text']) ? $settings['contact_text']->value : '' }}</textarea>
                                     </div>
                                 </div>
+                            </div>
+                            <div class="tab-pane fade" id="planes-web">
+                                <p class="help-block" style="padding: 0 0 10px 0;">
+                                    Sobrescribí los precios que se muestran en la web (landing page) sin modificar los precios del sistema.
+                                    Dejá el campo vacío para usar el precio del sistema.
+                                </p>
+                                @if(isset($serviciosWeb) && $serviciosWeb->count())
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>Servicio</th>
+                                                <th>Precio sistema (abono)</th>
+                                                <th>Precio web (abono)</th>
+                                                <th>Precio sistema (instalación)</th>
+                                                <th>Precio web (instalación)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($serviciosWeb as $srv)
+                                            <tr>
+                                                <td>{{ $srv->nombre }} <small class="text-muted">(id: {{ $srv->id }})</small></td>
+                                                <td>${{ number_format($srv->abono_mensual, 2) }}</td>
+                                                <td>
+                                                    <input type="number" step="0.01" min="0"
+                                                        class="form-control input-sm"
+                                                        name="web_price_abono_{{ $srv->id }}"
+                                                        placeholder="Sin sobrescribir"
+                                                        value="{{ isset($settings['web_price_abono_' . $srv->id]) ? $settings['web_price_abono_' . $srv->id]->value : '' }}">
+                                                </td>
+                                                <td>${{ $srv->costo_instalacion ? number_format($srv->costo_instalacion, 2) : '—' }}</td>
+                                                <td>
+                                                    <input type="number" step="0.01" min="0"
+                                                        class="form-control input-sm"
+                                                        name="web_price_inst_{{ $srv->id }}"
+                                                        placeholder="Sin sobrescribir"
+                                                        value="{{ isset($settings['web_price_inst_' . $srv->id]) ? $settings['web_price_inst_' . $srv->id]->value : '' }}">
+                                                </td>
+                                            </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                @else
+                                    <p>No hay servicios activos.</p>
+                                @endif
                             </div>
                         </div>
                         <div class="ln_solid"></div>

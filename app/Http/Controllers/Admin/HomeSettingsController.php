@@ -7,13 +7,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use App\HomeSetting;
+use App\Servicio;
 
 class HomeSettingsController extends Controller
 {
     public function edit()
     {
         $settings = HomeSetting::all()->keyBy('key');
-        return view('admin.home_settings.edit', compact('settings'));
+        $serviciosWeb = Servicio::where('status', 1)->orderBy('tipo')->orderBy('nombre')->get();
+        return view('admin.home_settings.edit', compact('settings', 'serviciosWeb'));
     }
 
     public function update(Request $request)

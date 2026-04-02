@@ -540,7 +540,7 @@ class ClientController extends Controller
 
             // verifico si puede mostrarse el boton de bonificacion
             $factura->fecha_actual = $fecha_actual;
-            $factura->btn_bonificacion = $fecha_actual->lt(Carbon::parse($factura->primer_vto_fecha));
+            $factura->btn_bonificacion = true; // sin restricción de tiempo
             $factura->btn_actualizar = $fecha_actual->gt(Carbon::parse($factura->segundo_vto_fecha));
 
 
@@ -548,12 +548,12 @@ class ClientController extends Controller
             $factura->primer_vto_fecha = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
             $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
 
-            $factura->importe_subtotal = $factura->importe_subtotal; 
-            $factura->importe_bonificacion = $factura->importe_bonificacion; 
-            $factura->importe_total = $factura->importe_total; 
+            $factura->importe_subtotal = $factura->importe_subtotal;
+            $factura->importe_bonificacion = $factura->importe_bonificacion;
+            $factura->importe_total = $factura->importe_total;
 
             $factura->fecha_pago = $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null;
-            
+
             $detalles =  $factura->detalle;
 
             foreach ($detalles as $detalle) {
@@ -1583,7 +1583,8 @@ class ClientController extends Controller
 
                 if ($user->status == 1) {
 
-                    $clients[] = ['data' => $user->id, 'value' => $user->firstname .' '.$user->lastname];
+                    $dni = $user->dni ? ' - ' . $user->dni : '';
+                    $clients[] = ['data' => $user->id, 'value' => $user->firstname .' '.$user->lastname . $dni];
 
                 }
 
@@ -2233,7 +2234,7 @@ class ClientController extends Controller
 
             // verifico si puede mostrarse el boton de bonificacion
             $factura->fecha_actual = $fecha_actual;
-            $factura->btn_bonificacion = $fecha_actual->lt(Carbon::parse($factura->primer_vto_fecha));
+            $factura->btn_bonificacion = true; // sin restricción de tiempo
             $factura->btn_actualizar = $fecha_actual->gt(Carbon::parse($factura->segundo_vto_fecha));
 
 
@@ -2242,9 +2243,9 @@ class ClientController extends Controller
             $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
 
             // Enviar importes tal como están en la base (sin number_format), como string
-            $factura->importe_subtotal = (string) $factura->importe_subtotal; 
-            $factura->importe_bonificacion = (string) $factura->importe_bonificacion; 
-            $factura->importe_total = (string) $factura->importe_total; 
+            $factura->importe_subtotal = (string) $factura->importe_subtotal;
+            $factura->importe_bonificacion = (string) $factura->importe_bonificacion;
+            $factura->importe_total = (string) $factura->importe_total;
             $factura->importe_pago = is_null($factura->importe_pago)
                 ? '0'
                 : (string) $factura->importe_pago;

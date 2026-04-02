@@ -207,6 +207,97 @@
       </div>
     </div>
 
+    {{-- ===== ND MANUAL (sin factura en sistema) ===== --}}
+    <div class="row">
+      <div class="col-md-10 col-md-offset-1">
+        <div class="x_panel">
+          <div class="x_title" style="cursor:pointer;" id="toggle-nd-manual">
+            <h2>
+              <i class="fa fa-exclamation-triangle text-danger"></i>
+              Emitir ND para factura <strong>no registrada</strong> en el sistema
+              <small class="text-muted"> — ingresá el número de la factura original</small>
+            </h2>
+            <div class="nav navbar-right panel_toolbox">
+              <a id="icon-toggle-nd-manual"><i class="fa fa-chevron-down"></i></a>
+            </div>
+            <div class="clearfix"></div>
+          </div>
+          <div class="x_content" id="panel-nd-manual" style="display:{{ session('tab_nd_manual') ? 'block' : 'none' }};">
+            <div class="alert alert-danger" style="margin-bottom:15px;">
+              <i class="fa fa-warning"></i>
+              Usá este formulario <strong>solo si la factura fue emitida en AFIP pero no figura en la base de datos</strong>.
+              La ND se guardará sin referencia a ninguna factura del sistema.
+            </div>
+            <form method="POST" action="/admin/afip-correccion/nd-manual" class="form-horizontal form-label-left" id="form-nd-manual">
+              {{ csrf_field() }}
+
+              <div class="form-group">
+                <label class="control-label col-md-3">Punto de venta / Letra <span class="required">*</span></label>
+                <div class="col-md-3">
+                  <select name="talonario_id" id="ndmanual-talonario" class="form-control" required>
+                    <option value="">— Seleccionar —</option>
+                    @foreach($talonarios as $tal)
+                      <option value="{{ $tal->id }}" {{ old('talonario_id') == $tal->id && session('tab_nd_manual') ? 'selected' : '' }}>
+                        Factura {{ $tal->letra }} — Pto. Vta. {{ str_pad($tal->nro_punto_vta, 4, '0', STR_PAD_LEFT) }}
+                      </option>
+                    @endforeach
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="control-label col-md-3">N° de factura original (en AFIP) <span class="required">*</span></label>
+                <div class="col-md-3">
+                  <input type="number" name="nro_factura_orig" class="form-control"
+                         value="{{ session('tab_nd_manual') ? old('nro_factura_orig') : '' }}" placeholder="Ej: 142" min="1" required>
+                  <p class="help-block">Número del comprobante al que se le aplica la ND.</p>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="control-label col-md-3">DNI / CUIT del receptor</label>
+                <div class="col-md-3">
+                  <input type="text" name="dni" class="form-control" id="ndmanual-dni"
+                         value="{{ session('tab_nd_manual') ? old('dni') : '' }}" placeholder="Ej: 28123456" maxlength="11" autocomplete="off">
+                  <p class="help-block">Requerido para ND tipo A (CUIT 11 dígitos) o para montos ≥ $10.000.000.</p>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="control-label col-md-3">Importe total (con IVA 21%) <span class="required">*</span></label>
+                <div class="col-md-3">
+                  <div class="input-group">
+                    <span class="input-group-addon">$</span>
+                    <input type="text" name="importe" id="ndmanual-importe" class="form-control"
+                           value="{{ session('tab_nd_manual') ? old('importe') : '' }}" placeholder="Ej: 500.00" required>
+                  </div>
+                  <p class="help-block">Neto: <strong id="ndmanual-neto">—</strong> &nbsp; IVA: <strong id="ndmanual-iva">—</strong></p>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="control-label col-md-3">Motivo <span class="required">*</span></label>
+                <div class="col-md-6">
+                  <textarea name="motivo" class="form-control" rows="3"
+                            placeholder="Describí el motivo del cargo adicional"
+                            required maxlength="500">{{ session('tab_nd_manual') ? old('motivo') : '' }}</textarea>
+                </div>
+              </div>
+
+              <div class="ln_solid"></div>
+              <div class="form-group">
+                <div class="col-md-6 col-md-offset-3">
+                  <button type="button" class="btn btn-danger btn-lg" id="btn-confirm-nd-manual">
+                    <i class="fa fa-paper-plane"></i> Emitir ND Manual en AFIP
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+
     {{-- ===== BUSCADOR ===== --}}
     <div class="row">
       <div class="col-md-10 col-md-offset-1">
@@ -282,14 +373,19 @@
               <h4><i class="fa fa-bolt"></i> Acciones en AFIP</h4>
 
               <ul class="nav nav-tabs" id="tabs-accion">
-                <li id="tab-li-nc" class="{{ session('tab') != 'factura' ? 'active' : '' }}">
+                <li id="tab-li-nc" class="{{ !in_array(session('tab'), ['factura', 'nd']) ? 'active' : '' }}">
                   <a href="#tab-nc" data-toggle="tab">
                     <i class="fa fa-minus-circle text-warning"></i> Emitir Nota de Crédito
                   </a>
                 </li>
+                <li id="tab-li-nd" class="{{ session('tab') == 'nd' ? 'active' : '' }}">
+                  <a href="#tab-nd" data-toggle="tab">
+                    <i class="fa fa-plus-circle text-danger"></i> Emitir Nota de Débito
+                  </a>
+                </li>
                 <li id="tab-li-factura" class="{{ session('tab') == 'factura' ? 'active' : '' }}">
                   <a href="#tab-factura" data-toggle="tab">
-                    <i class="fa fa-plus-circle text-info"></i> Emitir Factura Correctiva
+                    <i class="fa fa-file-text text-info"></i> Emitir Factura Correctiva
                   </a>
                 </li>
               </ul>
@@ -297,7 +393,7 @@
               <div class="tab-content" style="padding-top:20px;">
 
                 {{-- TAB NC --}}
-                <div class="tab-pane {{ session('tab') != 'factura' ? 'active' : '' }}" id="tab-nc">
+                <div class="tab-pane {{ !in_array(session('tab'), ['factura', 'nd']) ? 'active' : '' }}" id="tab-nc">
                   <div class="alert alert-warning">
                     <i class="fa fa-info-circle"></i>
                     Emite una <strong>Nota de Crédito</strong> asociada a la factura seleccionada en AFIP.
@@ -345,6 +441,62 @@
                       <div class="col-md-6 col-md-offset-3">
                         <button type="button" class="btn btn-warning btn-lg" id="btn-confirm-nc">
                           <i class="fa fa-paper-plane"></i> Emitir Nota de Crédito en AFIP
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+
+                {{-- TAB ND --}}
+                <div class="tab-pane {{ session('tab') == 'nd' ? 'active' : '' }}" id="tab-nd">
+                  <div class="alert alert-danger" style="margin-bottom:15px;">
+                    <i class="fa fa-info-circle"></i>
+                    Emite una <strong>Nota de Débito</strong> asociada a la factura seleccionada en AFIP.
+                    Se usa para documentar un <strong>cargo adicional</strong> al cliente.
+                    <strong>No modifica la factura ni el sistema de cobros.</strong>
+                  </div>
+                  <form id="form-nd" method="POST" class="form-horizontal form-label-left" action="">
+                    {{ csrf_field() }}
+                    <div class="form-group">
+                      <label class="control-label col-md-3">DNI del receptor <small class="text-muted">(requerido si monto ≥ $10.000.000)</small></label>
+                      <div class="col-md-3">
+                        <input type="text" name="dni" id="nd-dni" class="form-control"
+                               value="{{ session('tab') == 'nd' ? old('dni') : '' }}"
+                               placeholder="Ej: 28123456" maxlength="11" autocomplete="off">
+                        <p class="help-block">Dejá vacío para emitir como Consumidor Final.</p>
+                      </div>
+                    </div>
+                    <div class="form-group {{ $errors->has('importe') && session('tab') == 'nd' ? 'has-error' : '' }}">
+                      <label class="control-label col-md-3">Importe total (con IVA 21%) <span class="required">*</span></label>
+                      <div class="col-md-3">
+                        <div class="input-group">
+                          <span class="input-group-addon">$</span>
+                          <input type="text" name="importe" id="nd-importe" class="form-control"
+                                 value="{{ session('tab') == 'nd' ? old('importe') : '' }}"
+                                 placeholder="Ej: 500.00" required>
+                        </div>
+                        <p class="help-block">Neto: <strong id="nd-neto">—</strong> &nbsp; IVA: <strong id="nd-iva">—</strong></p>
+                        @if($errors->has('importe') && session('tab') == 'nd')
+                          <span class="text-danger">{{ $errors->first('importe') }}</span>
+                        @endif
+                      </div>
+                    </div>
+                    <div class="form-group {{ $errors->has('motivo') && session('tab') == 'nd' ? 'has-error' : '' }}">
+                      <label class="control-label col-md-3">Motivo <span class="required">*</span></label>
+                      <div class="col-md-6">
+                        <textarea name="motivo" class="form-control" rows="3"
+                                  placeholder="Describí el motivo del cargo adicional"
+                                  required maxlength="500">{{ session('tab') == 'nd' ? old('motivo') : '' }}</textarea>
+                        @if($errors->has('motivo') && session('tab') == 'nd')
+                          <span class="text-danger">{{ $errors->first('motivo') }}</span>
+                        @endif
+                      </div>
+                    </div>
+                    <div class="ln_solid"></div>
+                    <div class="form-group">
+                      <div class="col-md-6 col-md-offset-3">
+                        <button type="button" class="btn btn-danger btn-lg" id="btn-confirm-nd">
+                          <i class="fa fa-paper-plane"></i> Emitir Nota de Débito en AFIP
                         </button>
                       </div>
                     </div>
@@ -517,6 +669,7 @@ $(document).ready(function () {
 
         // Actualizar URLs de los formularios
         $('#form-nc').attr('action', '/admin/afip-correccion/' + f.id + '/nc?factura_id=' + f.id);
+        $('#form-nd').attr('action', '/admin/afip-correccion/' + f.id + '/nd?factura_id=' + f.id);
         $('#form-factura').attr('action', '/admin/afip-correccion/' + f.id + '/factura?factura_id=' + f.id);
       })
       .fail(function () {
@@ -530,6 +683,7 @@ $(document).ready(function () {
     $('#panel-detalle').hide();
     $('#panel-vacio').show();
     $('#form-nc').attr('action', '');
+    $('#form-nd').attr('action', '');
     $('#form-factura').attr('action', '');
   }
 
@@ -574,9 +728,14 @@ $(document).ready(function () {
     if (f.historial && f.historial.length) {
       var histHtml = '';
       $.each(f.historial, function (i, h) {
-        var badge = h.tipo === 'correccion'
-          ? '<span class="label label-warning">Nota de Crédito</span>'
-          : '<span class="label label-info">Factura Correctiva</span>';
+        var badge;
+        if (h.tipo === 'correccion') {
+          badge = '<span class="label label-warning">Nota de Crédito</span>';
+        } else if (h.tipo === 'nota_debito') {
+          badge = '<span class="label label-danger">Nota de Débito</span>';
+        } else {
+          badge = '<span class="label label-info">Factura Correctiva</span>';
+        }
         histHtml +=
           '<tr>' +
           '<td>' + badge + '</td>' +
@@ -620,6 +779,7 @@ $(document).ready(function () {
     }).trigger('input');
   }
   bindCalculo('nc-importe',   'nc-neto',   'nc-iva');
+  bindCalculo('nd-importe',   'nd-neto',   'nd-iva');
   bindCalculo('fact-importe', 'fact-neto', 'fact-iva');
 
   // ── Confirmaciones antes de submit ──────────────────────────────────────
@@ -637,6 +797,22 @@ $(document).ready(function () {
     )) {
       $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Emitiendo...');
       $('#form-nc').submit();
+    }
+  });
+
+  $('#btn-confirm-nd').on('click', function () {
+    if (!facturaActual) { alert('Seleccioná una factura primero.'); return; }
+    var importe = $('#nd-importe').val().trim();
+    if (!importe) { alert('Ingresá el importe.'); return; }
+    if (confirm(
+      '⚠️ CONFIRMACIÓN\n\n' +
+      'Factura: ' + facturaActual.letra + ' ' + facturaActual.nro_punto_vta + '-' + facturaActual.nro_factura + '\n' +
+      'Cliente: ' + facturaActual.cliente_nombre + '\n' +
+      'Se emitirá una NOTA DE DÉBITO en AFIP por $' + importe + '.\n' +
+      'La factura original NO será modificada.\n\n¿Continuar?'
+    )) {
+      $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Emitiendo...');
+      $('#form-nd').submit();
     }
   });
 
@@ -679,6 +855,35 @@ $(document).ready(function () {
     $panel.slideToggle(200, function () {
       $icon.toggleClass('fa-chevron-down fa-chevron-up');
     });
+  });
+
+  // ── Toggle + confirmación ND manual ─────────────────────────────────────
+
+  $('#toggle-nd-manual').on('click', function () {
+    var $panel = $('#panel-nd-manual');
+    var $icon  = $('#icon-toggle-nd-manual i');
+    $panel.slideToggle(200, function () {
+      $icon.toggleClass('fa-chevron-down fa-chevron-up');
+    });
+  });
+
+  bindCalculo('ndmanual-importe', 'ndmanual-neto', 'ndmanual-iva');
+
+  $('#btn-confirm-nd-manual').on('click', function () {
+    var talonario = $('#ndmanual-talonario option:selected').text().trim();
+    var nroOrig   = $('[name="nro_factura_orig"]', '#form-nd-manual').val().trim();
+    var importe   = $('#ndmanual-importe').val().trim();
+    if (!talonario || !nroOrig || !importe) { alert('Completá todos los campos obligatorios.'); return; }
+    if (confirm(
+      '⚠️ CONFIRMACIÓN\n\n' +
+      'Comprobante: ' + talonario + '\n' +
+      'N° factura original: ' + nroOrig + '\n' +
+      'Se emitirá una NOTA DE DÉBITO en AFIP por $' + importe + '.\n' +
+      'NO se guardará ningún registro en el sistema.\n\n¿Continuar?'
+    )) {
+      $(this).prop('disabled', true).html('<i class="fa fa-spinner fa-spin"></i> Emitiendo...');
+      $('#form-nd-manual').submit();
+    }
   });
 
   bindCalculo('fmanual-importe', 'fmanual-neto', 'fmanual-iva');

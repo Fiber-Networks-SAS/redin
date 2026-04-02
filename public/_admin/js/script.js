@@ -2190,6 +2190,12 @@ function getBalanceDetalleScreen() {
                                             // Las notas de crédito restan (ya vienen con importe_total_numeric negativo)
                                             total_importe_adeudado += (parseFloat(factura.importe_total_numeric) || 0);
                                             importe_adeudado = factura.importe_total_formatted;
+                                        } else if (factura.is_nota_debito) {
+                                            class_tr = 'debe';
+                                            importe_pago = '';
+                                            // Las notas de débito suman al saldo adeudado
+                                            total_importe_adeudado += (parseFloat(factura.importe_total_numeric) || 0);
+                                            importe_adeudado = factura.importe_total_formatted;
                                         } else if (factura.is_anulada) {
                                             // Facturas anuladas: no cuentan para totales
                                             class_tr = '';
@@ -2219,8 +2225,13 @@ function getBalanceDetalleScreen() {
                                         if (factura.is_nota_credito) {
                                             var tal_letra = (factura.talonario && factura.talonario.letra) ? factura.talonario.letra : '';
                                             var tal_pv = (factura.talonario && factura.talonario.nro_punto_vta) ? factura.talonario.nro_punto_vta : '';
-                                            
-                                            result += '<td>' + 'Nota de Crédito: ' + tal_letra + ' ' + tal_pv + ' - ' + factura.nro_factura + '</td>';
+                                            var orig_label = factura.factura_original_label ? ' <small>(cancela ' + factura.factura_original_label + ')</small>' : '';
+                                            result += '<td>Nota de Crédito: ' + tal_letra + ' ' + tal_pv + ' - ' + factura.nro_factura + orig_label + '</td>';
+                                        } else if (factura.is_nota_debito) {
+                                            var tal_letra = (factura.talonario && factura.talonario.letra) ? factura.talonario.letra : '';
+                                            var tal_pv = (factura.talonario && factura.talonario.nro_punto_vta) ? factura.talonario.nro_punto_vta : '';
+                                            var orig_label = factura.factura_original_label ? ' <small>(modifica ' + factura.factura_original_label + ')</small>' : '';
+                                            result += '<td>Nota de Débito: ' + tal_letra + ' ' + tal_pv + ' - ' + factura.nro_factura + orig_label + '</td>';
                                         } else {
                                             var anulada_label = factura.is_anulada ? ' <span style="color: red; font-weight: bold;">(ANULADA)</span>' : '';
                                             result += '<td><a href="/admin/period/bill/' + factura.id + '" target="_blank">'+factura.talonario.letra + ' ' + factura.talonario.nro_punto_vta + ' - '+ factura.nro_factura+'</a>' + anulada_label + '</td>';
