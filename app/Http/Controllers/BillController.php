@@ -42,6 +42,7 @@ use App\ImportCe;
 use App\PaymentPreference;
 use App\PagoInformado;
 use App\NotaCredito;
+use App\NotaDebito;
 use App\SaldoFavor;
 use App\Services\AfipService;
 use App\Services\PaymentQRService;
@@ -260,10 +261,10 @@ class BillController extends Controller
             $factura->cliente;
 
 
-            $factura->fecha_emision = Carbon::parse($factura->fecha_emision)->format('d/m/Y');
-            $factura->primer_vto_fecha = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
-            $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
-            $factura->tercer_vto_fecha = Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y');
+            $factura->fecha_emision = (is_string($factura->fecha_emision) && strpos($factura->fecha_emision, '/') !== false) ? $factura->fecha_emision : Carbon::parse($factura->fecha_emision)->format('d/m/Y');
+            $factura->primer_vto_fecha = (is_string($factura->primer_vto_fecha) && strpos($factura->primer_vto_fecha, '/') !== false) ? $factura->primer_vto_fecha : Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
+            $factura->segundo_vto_fecha = (is_string($factura->segundo_vto_fecha) && strpos($factura->segundo_vto_fecha, '/') !== false) ? $factura->segundo_vto_fecha : Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
+            $factura->tercer_vto_fecha = (is_string($factura->tercer_vto_fecha) && strpos($factura->tercer_vto_fecha, '/') !== false) ? $factura->tercer_vto_fecha : Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y');
 
 
             // $factura->importe_subtotal = number_format($factura->importe_subtotal, 2);
@@ -619,7 +620,8 @@ class BillController extends Controller
                         $afipResponse = $this->afipService->notaCreditoB(
                             $factura->talonario->nro_punto_vta,
                             $this->floatvalue($request->importe_bonificacion),
-                            $factura->nro_factura
+                            $factura->nro_factura,
+                            $factura->cliente->dni ?: null
                         );
                     }
 
@@ -817,11 +819,13 @@ class BillController extends Controller
         }
 
         $notasCredito = $factura->notaCredito()->where('tipo', 'correccion')->get();
+        $notasDebito  = $factura->notaDebito()->orderBy('fecha_emision', 'desc')->get();
 
         return View::make('period.view_factura_corregir')->with([
             'factura'      => $factura,
             'detalles'     => $detalles,
             'notasCredito' => $notasCredito,
+            'notasDebito'  => $notasDebito,
         ]);
     }
 
@@ -886,7 +890,8 @@ class BillController extends Controller
                 $afipResponse = $this->afipService->notaCreditoB(
                     $ptoVta,
                     $importe,
-                    $nroFactura
+                    $nroFactura,
+                    $factura->cliente->dni ?: null
                 );
             }
 
@@ -975,6 +980,129 @@ class BillController extends Controller
         }
     }
 
+    // Nota de Débito de corrección POST (desde vista de factura)
+    public function getBillCorregirNDPost(Request $request, $id)
+    {
+        $rules = [
+            'importe_nd' => ['required', 'numeric', 'min:0.01'],
+            'motivo_nd'  => ['required', 'string', 'max:500'],
+        ];
+
+        $validator = Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            return back()->withInput()->withErrors($validator)->with('tab_nd', true);
+        }
+
+        $factura = Factura::find($id);
+        if (!$factura) {
+            return back()->withInput()->with(['status' => 'danger', 'message' => 'Factura no encontrada.', 'icon' => 'fa-frown-o', 'tab_nd' => true]);
+        }
+
+        $factura->talonario;
+
+        try {
+            if ($this->afipService === null) {
+                throw new \Exception('El servicio de AFIP no está disponible. Verifique la configuración de certificados.');
+            }
+
+            $importe    = $this->floatvalue($request->importe_nd);
+            $ptoVta     = $factura->talonario->nro_punto_vta;
+            $nroFactura = $factura->nro_factura;
+            $letra      = $factura->talonario->letra;
+            $cbteTipo   = $letra == 'A' ? 2 : 7;
+            $lastVoucher = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+
+            if ($letra == 'A') {
+                $cuitLimpio = preg_replace('/\D/', '', (string) $factura->cliente->dni);
+                if (strlen($cuitLimpio) !== 11) {
+                    return back()->withInput()->with([
+                        'status'  => 'danger',
+                        'message' => 'El CUIT del cliente (' . $factura->cliente->firstname . ' ' . $factura->cliente->lastname . ') no es válido para emitir una ND tipo A. CUIT almacenado: "' . $factura->cliente->dni . '". Debe tener 11 dígitos.',
+                        'icon'    => 'fa-frown-o',
+                        'tab_nd'  => true,
+                    ]);
+                }
+                $afipResponse = $this->afipService->notaDebitoA($ptoVta, $cuitLimpio, $importe, $nroFactura);
+            } else {
+                $afipResponse = $this->afipService->notaDebitoB($ptoVta, $importe, $nroFactura, $factura->cliente->dni ?: null);
+            }
+
+            Log::info('ND Corrección - Respuesta AFIP', $afipResponse);
+
+            $nroNd = $afipResponse['CbteDesde'] ?? null;
+            if (empty($nroNd)) {
+                $newLastVoucher = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+                if ($newLastVoucher > $lastVoucher) {
+                    $nroNd = $newLastVoucher;
+                    $afipResponse['CbteDesde'] = $nroNd;
+                }
+            }
+
+            if (empty($nroNd) || empty($afipResponse['CAE'])) {
+                Log::error('ND Corrección - AFIP no devolvió CAE/CbteDesde válido', $afipResponse);
+                return back()->withInput()->with([
+                    'status'  => 'danger',
+                    'message' => 'AFIP no autorizó la nota de débito. Revise los logs para más detalles.',
+                    'icon'    => 'fa-frown-o',
+                    'tab_nd'  => true,
+                ]);
+            }
+
+            $caeVto = null;
+            if (!empty($afipResponse['CAEFchVto'])) {
+                $raw    = $afipResponse['CAEFchVto'];
+                $caeVto = (strlen($raw) == 8 && is_numeric($raw))
+                    ? Carbon::createFromFormat('Ymd', $raw)
+                    : Carbon::parse($raw);
+            }
+
+            $importeNeto = round($importe / 1.21, 2);
+            $importeIva  = round($importe - $importeNeto, 2);
+
+            $nd = new NotaDebito();
+            $nd->factura_id         = $factura->id;
+            $nd->talonario_id       = $factura->talonario_id;
+            $nd->nro_nota_debito    = $nroNd;
+            $nd->importe_ampliacion = $importeNeto;
+            $nd->importe_iva        = $importeIva;
+            $nd->importe_total      = round($importe, 2);
+            $nd->cae                = $afipResponse['CAE'];
+            $nd->cae_vto            = $caeVto;
+            $nd->fecha_emision      = Carbon::now();
+            $nd->motivo             = $request->motivo_nd;
+            $nd->nro_cliente        = $factura->nro_cliente;
+            $nd->periodo            = $factura->periodo;
+
+            if (!$nd->save()) {
+                Log::error('ND Corrección - Error al guardar NotaDebito', $nd->getAttributes());
+                return back()->withInput()->with([
+                    'status'  => 'danger',
+                    'message' => 'La nota de débito fue autorizada por AFIP (CAE: ' . $afipResponse['CAE'] . ') pero no pudo guardarse en la base de datos.',
+                    'icon'    => 'fa-warning',
+                    'tab_nd'  => true,
+                ]);
+            }
+
+            $nroNdFormateado = $letra . ' ' . $this->zerofill($ptoVta, 4) . '-' . $this->zerofill($nroNd);
+
+            return back()->with([
+                'status'  => 'success',
+                'message' => 'Nota de débito ' . $nroNdFormateado . ' emitida en AFIP (CAE: ' . $afipResponse['CAE'] . '). La factura original NO fue modificada.',
+                'icon'    => 'fa-check',
+                'tab_nd'  => true,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('ND Corrección - Excepción: ' . $e->getMessage());
+            return back()->withInput()->with([
+                'status'  => 'danger',
+                'message' => 'Error al emitir la nota de débito: ' . $e->getMessage(),
+                'icon'    => 'fa-frown-o',
+                'tab_nd'  => true,
+            ]);
+        }
+    }
+
     // -----------------------------------------------------------------------
     // HERRAMIENTA DE CORRECCIÓN AFIP (búsqueda libre + NC + factura nueva)
     // -----------------------------------------------------------------------
@@ -996,13 +1124,14 @@ class BillController extends Controller
             return response()->json(['error' => 'Factura no encontrada'], 404);
         }
 
-        $historial = $factura->notaCredito()
+        $historialNc = $factura->notaCredito()
             ->whereIn('tipo', ['correccion', 'factura_correctiva'])
             ->orderBy('fecha_emision', 'desc')
             ->get()
             ->map(function ($h) use ($factura) {
+                $tipoLabel = $h->tipo === 'factura_correctiva' ? 'factura_correctiva' : 'correccion';
                 return [
-                    'tipo'          => $h->tipo,
+                    'tipo'          => $tipoLabel,
                     'nro'           => $factura->talonario->letra . ' ' .
                                        str_pad($factura->talonario->nro_punto_vta, 4, '0', STR_PAD_LEFT) . '-' .
                                        str_pad($h->nro_nota_credito, 8, '0', STR_PAD_LEFT),
@@ -1012,7 +1141,28 @@ class BillController extends Controller
                     'cae_vto'       => $h->cae_vto ? Carbon::parse($h->cae_vto)->format('d/m/Y') : '-',
                     'motivo'        => $h->motivo,
                 ];
-            })->values();
+            });
+
+        $historialNd = $factura->notaDebito()
+            ->orderBy('fecha_emision', 'desc')
+            ->get()
+            ->map(function ($h) use ($factura) {
+                return [
+                    'tipo'          => 'nota_debito',
+                    'nro'           => $factura->talonario->letra . ' ' .
+                                       str_pad($factura->talonario->nro_punto_vta, 4, '0', STR_PAD_LEFT) . '-' .
+                                       str_pad($h->nro_nota_debito, 8, '0', STR_PAD_LEFT),
+                    'fecha'         => Carbon::parse($h->fecha_emision)->format('d/m/Y H:i'),
+                    'importe_total' => number_format($h->importe_total, 2, ',', '.'),
+                    'cae'           => $h->cae,
+                    'cae_vto'       => $h->cae_vto ? Carbon::parse($h->cae_vto)->format('d/m/Y') : '-',
+                    'motivo'        => $h->motivo,
+                ];
+            });
+
+        $historial = $historialNc->merge($historialNd)
+            ->sortByDesc('fecha')
+            ->values();
 
         return response()->json([
             'id'               => $factura->id,
@@ -1185,6 +1335,103 @@ class BillController extends Controller
         } catch (\Exception $e) {
             Log::error('AfipCorreccion NC - Excepción: ' . $e->getMessage());
             return redirect('/admin/afip-correccion?factura_id=' . $id)->with(['status' => 'danger', 'message' => 'Error: ' . $e->getMessage(), 'icon' => 'fa-frown-o', 'tab' => 'nc']);
+        }
+    }
+
+    public function postAfipCorreccionND(Request $request, $id)
+    {
+        $rules = [
+            'importe' => ['required', 'numeric', 'min:0.01'],
+            'motivo'  => ['required', 'string', 'max:500'],
+        ];
+        $validator = Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            return redirect('/admin/afip-correccion?factura_id=' . $id)->withInput()->withErrors($validator)->with('tab', 'nd');
+        }
+
+        $factura = Factura::find($id);
+        if (!$factura) {
+            return redirect('/admin/afip-correccion')->with(['status' => 'danger', 'message' => 'Factura no encontrada.', 'icon' => 'fa-frown-o']);
+        }
+        $factura->talonario;
+
+        try {
+            if ($this->afipService === null) {
+                throw new \Exception('El servicio de AFIP no está disponible.');
+            }
+
+            $importe    = $this->floatvalue($request->importe);
+            $ptoVta     = $factura->talonario->nro_punto_vta;
+            $nroFactura = $factura->nro_factura;
+            $letra      = $factura->talonario->letra;
+            $cbteTipo   = $letra == 'A' ? 2 : 7;
+            $lastVoucher = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+
+            if ($letra == 'A') {
+                $cuitLimpio = preg_replace('/\D/', '', (string) $factura->cliente->dni);
+                if (strlen($cuitLimpio) !== 11) {
+                    return redirect('/admin/afip-correccion?factura_id=' . $factura->id)->with([
+                        'status'  => 'danger',
+                        'message' => 'CUIT inválido para Factura A: "' . $factura->cliente->dni . '". Debe tener 11 dígitos.',
+                        'icon'    => 'fa-frown-o',
+                        'tab'     => 'nd',
+                    ]);
+                }
+                $afipResponse = $this->afipService->notaDebitoA($ptoVta, $cuitLimpio, $importe, $nroFactura);
+            } else {
+                $afipResponse = $this->afipService->notaDebitoB($ptoVta, $importe, $nroFactura, $factura->cliente->dni ?: null);
+            }
+
+            Log::info('AfipCorreccion ND - Respuesta AFIP', $afipResponse);
+
+            $nroNd = $afipResponse['CbteDesde'] ?? null;
+            if (empty($nroNd)) {
+                $newLast = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+                if ($newLast > $lastVoucher) {
+                    $nroNd = $newLast;
+                    $afipResponse['CbteDesde'] = $nroNd;
+                }
+            }
+
+            if (empty($nroNd) || empty($afipResponse['CAE'])) {
+                return redirect('/admin/afip-correccion?factura_id=' . $factura->id)->with(['status' => 'danger', 'message' => 'AFIP no autorizó la nota de débito.', 'icon' => 'fa-frown-o', 'tab' => 'nd']);
+            }
+
+            $caeVto = null;
+            if (!empty($afipResponse['CAEFchVto'])) {
+                $raw    = $afipResponse['CAEFchVto'];
+                $caeVto = (strlen($raw) == 8 && is_numeric($raw))
+                    ? Carbon::createFromFormat('Ymd', $raw)
+                    : Carbon::parse($raw);
+            }
+
+            $importeNeto = round($importe / 1.21, 2);
+            $nd = new NotaDebito();
+            $nd->factura_id         = $factura->id;
+            $nd->talonario_id       = $factura->talonario_id;
+            $nd->nro_nota_debito    = $nroNd;
+            $nd->importe_ampliacion = $importeNeto;
+            $nd->importe_iva        = round($importe - $importeNeto, 2);
+            $nd->importe_total      = round($importe, 2);
+            $nd->cae                = $afipResponse['CAE'];
+            $nd->cae_vto            = $caeVto;
+            $nd->fecha_emision      = Carbon::now();
+            $nd->motivo             = $request->motivo;
+            $nd->nro_cliente        = $factura->cliente->id;
+            $nd->periodo            = $factura->periodo;
+            $nd->save();
+
+            $nroFmt = $letra . ' ' . $this->zerofill($ptoVta, 4) . '-' . $this->zerofill($nroNd);
+            return redirect('/admin/afip-correccion?factura_id=' . $factura->id)->with([
+                'status'  => 'success',
+                'message' => "ND {$nroFmt} emitida en AFIP (CAE: {$afipResponse['CAE']}). La factura original NO fue modificada.",
+                'icon'    => 'fa-check',
+                'tab'     => 'nd',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('AfipCorreccion ND - Excepción: ' . $e->getMessage());
+            return redirect('/admin/afip-correccion?factura_id=' . $id)->with(['status' => 'danger', 'message' => 'Error: ' . $e->getMessage(), 'icon' => 'fa-frown-o', 'tab' => 'nd']);
         }
     }
 
@@ -1435,6 +1682,370 @@ class BillController extends Controller
             return redirect('/admin/afip-correccion')
                 ->withInput()
                 ->with(['status' => 'danger', 'message' => 'Error: ' . $e->getMessage(), 'icon' => 'fa-frown-o', 'tab_factura_manual' => true]);
+        }
+    }
+
+    /**
+     * Emite una Nota de Débito en AFIP para una factura que NO existe en el sistema.
+     */
+    public function postAfipCorreccionNDManual(Request $request)
+    {
+        $rules = [
+            'talonario_id'       => ['required', 'integer', 'exists:talonarios,id'],
+            'nro_factura_orig'   => ['required', 'integer', 'min:1'],
+            'importe'            => ['required', 'numeric', 'min:0.01'],
+            'motivo'             => ['required', 'string', 'max:500'],
+            'dni'                => ['nullable', 'string', 'max:20'],
+        ];
+        $validator = Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            return redirect('/admin/afip-correccion')
+                ->withInput()
+                ->withErrors($validator)
+                ->with('tab_nd_manual', true);
+        }
+
+        $talonario = Talonario::find((int) $request->get('talonario_id'));
+        $letra     = $talonario->letra;
+        $ptoVta    = $talonario->nro_punto_vta;
+        $nroOrig   = (int) $request->get('nro_factura_orig');
+        $importe   = $this->floatvalue($request->importe);
+
+        try {
+            if ($this->afipService === null) {
+                throw new \Exception('El servicio de AFIP no está disponible.');
+            }
+
+            $cbteTipo    = $letra === 'A' ? 2 : 7;
+            $lastVoucher = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+
+            if ($letra === 'A') {
+                $cuit = preg_replace('/\D/', '', trim($request->get('dni', '')));
+                if (strlen($cuit) !== 11) {
+                    return redirect('/admin/afip-correccion')
+                        ->withInput()
+                        ->with(['status' => 'danger', 'message' => 'Para ND tipo A se requiere CUIT de 11 dígitos.', 'icon' => 'fa-frown-o', 'tab_nd_manual' => true]);
+                }
+                $afipResponse = $this->afipService->notaDebitoA($ptoVta, $cuit, $importe, $nroOrig);
+            } else {
+                $dniB = preg_replace('/\D/', '', trim($request->get('dni', ''))) ?: null;
+                $afipResponse = $this->afipService->notaDebitoB($ptoVta, $importe, $nroOrig, $dniB);
+            }
+
+            Log::info('AfipCorreccion NDManual - Respuesta AFIP', $afipResponse);
+
+            $nroNd = $afipResponse['CbteDesde'] ?? null;
+            if (empty($nroNd)) {
+                $newLast = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+                if ($newLast > $lastVoucher) {
+                    $nroNd = $newLast;
+                    $afipResponse['CbteDesde'] = $nroNd;
+                }
+            }
+
+            if (empty($nroNd) || empty($afipResponse['CAE'])) {
+                return redirect('/admin/afip-correccion')
+                    ->withInput()
+                    ->with(['status' => 'danger', 'message' => 'AFIP no autorizó la nota de débito manual.', 'icon' => 'fa-frown-o', 'tab_nd_manual' => true]);
+            }
+
+            $nroFmt = $letra . ' ' . $this->zerofill($ptoVta, 4) . '-' . $this->zerofill($nroNd);
+            return redirect('/admin/afip-correccion')->with([
+                'status'  => 'success',
+                'message' => "ND manual {$nroFmt} emitida en AFIP (CAE: {$afipResponse['CAE']}). Factura original referenciada: {$letra} {$this->zerofill($ptoVta,4)}-{$this->zerofill($nroOrig)}.",
+                'icon'    => 'fa-check',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('AfipCorreccion NDManual - Excepción: ' . $e->getMessage());
+            return redirect('/admin/afip-correccion')
+                ->withInput()
+                ->with(['status' => 'danger', 'message' => 'Error: ' . $e->getMessage(), 'icon' => 'fa-frown-o', 'tab_nd_manual' => true]);
+        }
+    }
+
+    // =====================================================================
+    //  ANULACIÓN DE FACTURA INDIVIDUAL + NC POR EL TOTAL
+    // =====================================================================
+
+    /**
+     * Vista principal para anular una factura individual.
+     */
+    public function getAnularFactura(Request $request)
+    {
+        return View::make('afip.anular_factura');
+    }
+
+    /**
+     * Búsqueda AJAX de facturas activas (no anuladas) para anular.
+     */
+    public function getAnularFacturaBuscar(Request $request)
+    {
+        $q = trim($request->get('q', ''));
+
+        if (strlen($q) < 2) {
+            return response()->json([]);
+        }
+
+        $userIds = User::where(DB::raw("CONCAT(firstname, ' ', lastname)"), 'like', "%{$q}%")
+            ->orWhere('dni', 'like', "%{$q}%")
+            ->get(['id'])
+            ->pluck('id')
+            ->toArray();
+
+        $facturas = Factura::with(['talonario', 'cliente'])
+            ->whereNull('deleted_at')
+            ->where(function ($query) use ($q, $userIds) {
+                if (is_numeric($q)) {
+                    $query->where('nro_factura', (int)$q);
+                    $query->orWhere('nro_cliente', (int)$q);
+                }
+                if (ctype_digit($q) && strlen($q) >= 6) {
+                    $query->orWhere('cae', $q);
+                }
+                if (!empty($userIds)) {
+                    $query->orWhereIn('user_id', $userIds);
+                }
+            })
+            ->orderBy('fecha_emision', 'desc')
+            ->limit(20)
+            ->get();
+
+        $results = $facturas->map(function ($f) {
+            $letra  = $f->talonario->letra ?? '?';
+            $pto    = $this->zerofill($f->talonario->nro_punto_vta, 4);
+            $nro    = $this->zerofill($f->nro_factura);
+            $nombre = $f->cliente ? ($f->cliente->firstname . ' ' . $f->cliente->lastname) : 'N/A';
+            return [
+                'id'    => $f->id,
+                'label' => "Fact. {$letra} {$pto}-{$nro} — {$nombre} — \${$f->importe_total} ({$f->periodo})",
+            ];
+        });
+
+        return response()->json($results);
+    }
+
+    /**
+     * Detalle AJAX de una factura para el panel de anulación.
+     */
+    public function getAnularFacturaDetalle(Request $request, $id)
+    {
+        $factura = Factura::with(['talonario', 'cliente', 'detalle.servicio'])->find($id);
+
+        if (!$factura) {
+            return response()->json(['error' => 'Factura no encontrada'], 404);
+        }
+
+        if ($factura->trashed()) {
+            return response()->json(['error' => 'La factura ya está anulada'], 400);
+        }
+
+        $historial = $factura->notaCredito()
+            ->orderBy('fecha_emision', 'desc')
+            ->get()
+            ->map(function ($h) use ($factura) {
+                return [
+                    'tipo'          => $h->tipo,
+                    'nro'           => $factura->talonario->letra . ' ' .
+                                       str_pad($factura->talonario->nro_punto_vta, 4, '0', STR_PAD_LEFT) . '-' .
+                                       str_pad($h->nro_nota_credito, 8, '0', STR_PAD_LEFT),
+                    'fecha'         => Carbon::parse($h->fecha_emision)->format('d/m/Y H:i'),
+                    'importe_total' => number_format($h->importe_total, 2, ',', '.'),
+                    'cae'           => $h->cae,
+                    'cae_vto'       => $h->cae_vto ? Carbon::parse($h->cae_vto)->format('d/m/Y') : '-',
+                    'motivo'        => $h->motivo,
+                ];
+            })->values();
+
+        $estabaPagada = !empty($factura->fecha_pago) && !empty($factura->importe_pago);
+
+        return response()->json([
+            'id'               => $factura->id,
+            'letra'            => $factura->talonario->letra,
+            'nro_punto_vta'    => str_pad($factura->talonario->nro_punto_vta, 4, '0', STR_PAD_LEFT),
+            'nro_factura'      => str_pad($factura->nro_factura, 8, '0', STR_PAD_LEFT),
+            'periodo'          => $factura->periodo,
+            'fecha_emision'    => Carbon::parse($factura->fecha_emision)->format('d/m/Y'),
+            'cliente_nombre'   => $factura->cliente->firstname . ' ' . $factura->cliente->lastname,
+            'cliente_dni'      => $factura->cliente->dni,
+            'importe_subtotal' => number_format($factura->importe_subtotal, 2, ',', '.'),
+            'importe_total'    => number_format($factura->importe_total, 2, ',', '.'),
+            'importe_pago'     => $estabaPagada ? number_format($factura->importe_pago, 2, ',', '.') : null,
+            'cae'              => $factura->cae,
+            'fecha_pago'       => $factura->fecha_pago ? Carbon::parse($factura->fecha_pago)->format('d/m/Y') : null,
+            'detalles'         => $factura->detalle->map(function ($d) {
+                return [
+                    'servicio' => $d->servicio->nombre ?? 'N/A',
+                    'importe'  => number_format($d->importe, 2, ',', '.'),
+                ];
+            })->values(),
+            'historial'        => $historial,
+        ]);
+    }
+
+    /**
+     * Procesa la anulación: emite NC por el total en AFIP, anula la factura y crea saldo a favor si corresponde.
+     */
+    public function postAnularFactura(Request $request, $id)
+    {
+        $rules = [
+            'motivo' => ['required', 'string', 'max:500'],
+        ];
+        $validator = Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            return redirect('/admin/anular-factura')->withInput()->withErrors($validator);
+        }
+
+        $factura = Factura::with(['talonario', 'cliente'])->find($id);
+
+        if (!$factura) {
+            return redirect('/admin/anular-factura')->with([
+                'status' => 'danger', 'message' => 'Factura no encontrada.', 'icon' => 'fa-frown-o'
+            ]);
+        }
+
+        if ($factura->trashed()) {
+            return redirect('/admin/anular-factura')->with([
+                'status' => 'danger', 'message' => 'La factura ya está anulada.', 'icon' => 'fa-frown-o'
+            ]);
+        }
+
+        $userId  = Auth::id();
+        $ptoVta  = $factura->talonario->nro_punto_vta;
+        $letra   = $factura->talonario->letra;
+        $importe = $factura->importe_total;
+
+        try {
+            if ($this->afipService === null) {
+                throw new \Exception('El servicio de AFIP no está disponible. Verifique la configuración de certificados.');
+            }
+
+            $cbteTipo    = $letra == 'A' ? 3 : 8; // 3=NC A, 8=NC B
+            $lastVoucher = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+
+            // Emitir NC en AFIP
+            if ($letra == 'A') {
+                $cuitLimpio = preg_replace('/\D/', '', (string) $factura->cliente->dni);
+                if (strlen($cuitLimpio) !== 11) {
+                    return redirect('/admin/anular-factura')->with([
+                        'status'  => 'danger',
+                        'message' => 'CUIT inválido para Factura A: "' . $factura->cliente->dni . '". Debe tener 11 dígitos.',
+                        'icon'    => 'fa-frown-o',
+                    ]);
+                }
+                $afipResponse = $this->afipService->notaCreditoA($ptoVta, $cuitLimpio, $importe, $factura->nro_factura);
+            } else {
+                $afipResponse = $this->afipService->notaCreditoB($ptoVta, $importe, $factura->nro_factura, $factura->cliente->dni ?: null);
+            }
+
+            Log::info('AnularFactura - Respuesta AFIP', [
+                'factura_id' => $factura->id,
+                'response'   => $afipResponse,
+            ]);
+
+            // Verificar número de NC
+            $nroNc = $afipResponse['CbteDesde'] ?? null;
+            if (empty($nroNc)) {
+                $newLast = $this->afipService->getLastVoucher($ptoVta, $cbteTipo);
+                if ($newLast > $lastVoucher) {
+                    $nroNc = $newLast;
+                    $afipResponse['CbteDesde'] = $nroNc;
+                }
+            }
+
+            if (empty($nroNc) || empty($afipResponse['CAE'])) {
+                $obs = isset($afipResponse['Observaciones']) ? ': ' . print_r($afipResponse['Observaciones'], true) : '';
+                return redirect('/admin/anular-factura')->with([
+                    'status'  => 'danger',
+                    'message' => 'AFIP no autorizó la nota de crédito' . $obs,
+                    'icon'    => 'fa-frown-o',
+                ]);
+            }
+
+            // Parsear CAE Vto
+            $caeVto = null;
+            if (!empty($afipResponse['CAEFchVto'])) {
+                $raw = $afipResponse['CAEFchVto'];
+                $caeVto = (strlen($raw) == 8 && is_numeric($raw))
+                    ? Carbon::createFromFormat('Ymd', $raw)
+                    : Carbon::parse($raw);
+            }
+
+            // Crear registro de Nota de Crédito
+            $importeNeto = round($importe / 1.21, 2);
+            $nota = new NotaCredito();
+            $nota->factura_id          = $factura->id;
+            $nota->talonario_id        = $factura->talonario_id;
+            $nota->nro_nota_credito    = $nroNc;
+            $nota->importe_bonificacion = $importeNeto;
+            $nota->importe_iva         = round($importe - $importeNeto, 2);
+            $nota->importe_total       = round($importe, 2);
+            $nota->cae                 = $afipResponse['CAE'];
+            $nota->cae_vto             = $caeVto;
+            $nota->fecha_emision       = Carbon::now();
+            $nota->motivo              = 'ANULACIÓN DE FACTURA - ' . $request->motivo . ' - Por: ' . Auth::user()->name;
+            $nota->nro_cliente         = is_numeric($factura->nro_cliente)
+                ? $factura->nro_cliente
+                : (int) preg_replace('/[^0-9]/', '', $factura->nro_cliente);
+            $nota->periodo             = $factura->periodo;
+            $nota->tipo                = 'anulacion';
+            $nota->save();
+
+            Log::info('AnularFactura - NC creada', [
+                'nc_id'  => $nota->id,
+                'nro_nc' => $nota->nro_nota_credito,
+                'cae'    => $nota->cae,
+            ]);
+
+            // Si estaba pagada, crear saldo a favor
+            $estabaPagada = !empty($factura->fecha_pago) && !empty($factura->importe_pago) && $factura->importe_pago > 0;
+            $saldoMsg = '';
+
+            if ($estabaPagada) {
+                $saldoFavor = new SaldoFavor();
+                $saldoFavor->user_id            = $factura->user_id;
+                $saldoFavor->factura_anulada_id  = $factura->id;
+                $saldoFavor->nota_credito_id     = $nota->id;
+                $saldoFavor->periodo             = $factura->periodo;
+                $saldoFavor->importe_pagado      = $factura->importe_pago;
+                $saldoFavor->importe_utilizado   = 0;
+                $saldoFavor->importe_disponible  = $factura->importe_pago;
+                $saldoFavor->estado              = 'pendiente';
+                $saldoFavor->observaciones       = 'Saldo a favor por anulación de factura #' . $factura->nro_factura .
+                    ' (período ' . $factura->periodo . ') pagada el ' . Carbon::parse($factura->fecha_pago)->format('d/m/Y');
+                $saldoFavor->save();
+
+                $saldoMsg = ' Se creó saldo a favor por $' . number_format($factura->importe_pago, 2, ',', '.') . '.';
+
+                Log::info('AnularFactura - Saldo a favor creado', [
+                    'saldo_id' => $saldoFavor->id,
+                    'importe'  => $factura->importe_pago,
+                ]);
+            }
+
+            // Soft delete de la factura
+            $factura->motivo_anulacion = 'ANULACIÓN INDIVIDUAL - ' . $request->motivo;
+            $factura->anulado_por      = $userId;
+            $factura->fecha_anulacion  = Carbon::now();
+            $factura->save();
+            $factura->delete();
+
+            Log::info('AnularFactura - Factura anulada', ['factura_id' => $factura->id]);
+
+            $nroFmt = $letra . ' ' . $this->zerofill($ptoVta, 4) . '-' . $this->zerofill($nroNc);
+            return redirect('/admin/anular-factura')->with([
+                'status'  => 'success',
+                'message' => "Factura {$letra} {$this->zerofill($ptoVta,4)}-{$this->zerofill($factura->nro_factura)} anulada correctamente. NC {$nroFmt} emitida en AFIP (CAE: {$afipResponse['CAE']}).{$saldoMsg}",
+                'icon'    => 'fa-check',
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('AnularFactura - Excepción: ' . $e->getMessage());
+            return redirect('/admin/anular-factura')->with([
+                'status'  => 'danger',
+                'message' => 'Error: ' . $e->getMessage(),
+                'icon'    => 'fa-frown-o',
+            ]);
         }
     }
 
@@ -2870,10 +3481,10 @@ class BillController extends Controller
             $factura->nro_cliente = $this->zerofill($factura->nro_cliente, 5);
 
 
-            $factura->fecha_emision = Carbon::parse($factura->fecha_emision)->format('d/m/Y');
-            $factura->primer_vto_fecha = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
-            $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
-            $factura->tercer_vto_fecha = Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y');
+            $factura->fecha_emision = (is_string($factura->fecha_emision) && strpos($factura->fecha_emision, '/') !== false) ? $factura->fecha_emision : Carbon::parse($factura->fecha_emision)->format('d/m/Y');
+            $factura->primer_vto_fecha = (is_string($factura->primer_vto_fecha) && strpos($factura->primer_vto_fecha, '/') !== false) ? $factura->primer_vto_fecha : Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
+            $factura->segundo_vto_fecha = (is_string($factura->segundo_vto_fecha) && strpos($factura->segundo_vto_fecha, '/') !== false) ? $factura->segundo_vto_fecha : Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
+            $factura->tercer_vto_fecha = (is_string($factura->tercer_vto_fecha) && strpos($factura->tercer_vto_fecha, '/') !== false) ? $factura->tercer_vto_fecha : Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y');
 
 
             // $factura->importe_subtotal      = number_format($factura->importe_subtotal, 2);
@@ -3286,10 +3897,10 @@ class BillController extends Controller
             $factura->nro_cliente = $this->zerofill($factura->nro_cliente, 5);
 
 
-            $factura->fecha_emision = Carbon::parse($factura->fecha_emision)->format('d/m/Y');
-            $factura->primer_vto_fecha = Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
-            $factura->segundo_vto_fecha = Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
-            $factura->tercer_vto_fecha = Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y');
+            $factura->fecha_emision = (is_string($factura->fecha_emision) && strpos($factura->fecha_emision, '/') !== false) ? $factura->fecha_emision : Carbon::parse($factura->fecha_emision)->format('d/m/Y');
+            $factura->primer_vto_fecha = (is_string($factura->primer_vto_fecha) && strpos($factura->primer_vto_fecha, '/') !== false) ? $factura->primer_vto_fecha : Carbon::parse($factura->primer_vto_fecha)->format('d/m/Y');
+            $factura->segundo_vto_fecha = (is_string($factura->segundo_vto_fecha) && strpos($factura->segundo_vto_fecha, '/') !== false) ? $factura->segundo_vto_fecha : Carbon::parse($factura->segundo_vto_fecha)->format('d/m/Y');
+            $factura->tercer_vto_fecha = (is_string($factura->tercer_vto_fecha) && strpos($factura->tercer_vto_fecha, '/') !== false) ? $factura->tercer_vto_fecha : Carbon::parse($factura->tercer_vto_fecha)->format('d/m/Y');
 
 
             // $factura->importe_subtotal      = number_format($factura->importe_subtotal, 2);
@@ -3812,18 +4423,52 @@ class BillController extends Controller
     }
 
 
+    /**
+     * Genera la lista de períodos mm/aaaa entre $from y $to inclusive.
+     * Evita la comparación string incorrecta al cruzar años (ej: "09/2025" > "02/2026").
+     */
+    private function getPeriodRange($from, $to)
+    {
+        if (empty($from) || empty($to)) return null;
+        $pf = explode('/', $from);
+        $pt = explode('/', $to);
+        if (count($pf) < 2 || count($pt) < 2) return null;
+
+        $month = (int)$pf[0]; $year = (int)$pf[1];
+        $month_to = (int)$pt[0]; $year_to = (int)$pt[1];
+
+        $periods = [];
+        $safety = 0;
+        while (($year < $year_to || ($year == $year_to && $month <= $month_to)) && $safety < 120) {
+            $periods[] = str_pad($month, 2, '0', STR_PAD_LEFT) . '/' . $year;
+            $month++;
+            if ($month > 12) { $month = 1; $year++; }
+            $safety++;
+        }
+        return $periods;
+    }
+
     public function getBalanceDetalle($request)
     {
         // Inicializar variable para incluir facturas anuladas
         //$include_annuladas = $request->has('include_annuladas') && $request->include_annuladas;
 
-        // Convertir períodos de formato mm/aaaa a YYYY-MM
         $periodo_from = $request->date_from ?? '';
         $periodo_to = $request->date_to ?? '';
 
 
-        // get facturas por período (incluyendo anuladas para traer sus notas de crédito)
-        $facturas = Factura::withTrashed()->with('notaCredito')->whereBetween('periodo', [$periodo_from, $periodo_to]);
+        // get facturas por período (incluyendo anuladas para traer sus notas de crédito y débito)
+        $facturas = Factura::withTrashed()->with('notaCredito', 'notaDebito');
+
+        if (!empty($periodo_from) && !empty($periodo_to)) {
+            // Generar lista de períodos para evitar bug de comparación string cross-year
+            $periods = $this->getPeriodRange($periodo_from, $periodo_to);
+            if ($periods) {
+                $facturas = $facturas->whereIn('periodo', $periods);
+            }
+        } elseif (!empty($periodo_from)) {
+            $facturas = $facturas->where('periodo', $periodo_from);
+        }
 
 
         if ($request->user_id != '') {
@@ -3856,6 +4501,8 @@ class BillController extends Controller
                     $factura->cliente->id = 0;
                     $factura->cliente->nombre_apellido = 'Cliente Eliminado';
                 }
+                // Campo plano para XLS (evita acceso a stdClass como array)
+                $factura->nombre_cliente = $factura->cliente->nombre_apellido;
                 
                 // parse fecha de emision
                 $factura->fecha_emision = Carbon::parse($factura->fecha_emision)->format('d/m/Y');
@@ -3927,23 +4574,68 @@ class BillController extends Controller
                         $ncArray['importe_total_formatted'] = '-' . number_format(abs($importe_nc), 2, ',', '.');
                         
                         $ncArray['is_nota_credito'] = true;
-                        
+
+                        // Etiqueta de la factura original a la que pertenece esta NC
+                        $ncArray['factura_original_label'] = $factura->talonario->letra . ' ' . $factura->talonario->nro_punto_vta . ' - ' . $factura->nro_factura;
+
                         // Heredar el estado de anulación de la factura padre
                         // Si la factura está anulada, su NC tampoco cuenta en totales
                         $ncArray['is_anulada'] = $factura->deleted_at ? true : false;
-                        
+
                         // Campos de pago vacíos (NC no se paga, se deduce)
                         $ncArray['importe_pago_formatted'] = '';
                         $ncArray['importe_pago_numeric'] = 0;
                         $ncArray['fecha_pago'] = '';
                         $ncArray['forma_pago'] = '';
-                        
+
+                        // Campo plano para XLS
+                        $ncArray['nombre_cliente'] = $factura->nombre_cliente;
+
                         // Add to array
                         $facturasArray[$factura->nro_cliente][] = $ncArray;
                     }
                 }
+
+                // Agregar Notas de Débito asociadas
+                if ($factura->notaDebito && $factura->notaDebito->count() > 0) {
+                    foreach ($factura->notaDebito as $nd) {
+                        $nd->talonario;
+                        if ($nd->talonario) {
+                            $nd->talonario->nro_punto_vta = $this->zerofill($nd->talonario->nro_punto_vta, 4);
+                        }
+
+                        $ndArray = $nd->toArray();
+                        $ndArray['talonario'] = $nd->talonario ? $nd->talonario->toArray() : ['letra' => '', 'nro_punto_vta' => ''];
+
+                        $ndArray['nro_factura'] = $this->zerofill($nd->nro_nota_debito);
+                        $ndArray['fecha_emision'] = Carbon::parse($nd->fecha_emision)->format('d/m/Y');
+
+                        // Importes positivos: la ND suma al saldo adeudado
+                        $importe_nd = $nd->importe_total;
+                        $ndArray['importe_total_numeric'] = abs($importe_nd);
+                        $ndArray['importe_total_formatted'] = number_format(abs($importe_nd), 2, ',', '.');
+
+                        $ndArray['is_nota_debito'] = true;
+                        $ndArray['is_anulada'] = false;
+
+                        // Etiqueta de la factura original a la que pertenece esta ND
+                        $ndArray['factura_original_label'] = $factura->talonario->letra . ' ' . $factura->talonario->nro_punto_vta . ' - ' . $factura->nro_factura;
+
+                        // Campos de pago vacíos (ND no tiene pago directo)
+                        $ndArray['importe_pago_formatted'] = '';
+                        $ndArray['importe_pago_numeric'] = 0;
+                        $ndArray['fecha_pago'] = '';
+                        $ndArray['forma_pago'] = '';
+
+                        // Campo plano para XLS
+                        $ndArray['nombre_cliente'] = $factura->nombre_cliente;
+                        $ndArray['nro_cliente'] = $factura->nro_cliente;
+
+                        $facturasArray[$factura->nro_cliente][] = $ndArray;
+                    }
+                }
             }
-            
+
             return $facturasArray;
         } else {
             return null;
@@ -4064,7 +4756,14 @@ class BillController extends Controller
                                     // Las notas de crédito restan (ya vienen con importe_total_numeric negativo)
                                     $total_importe_adeudado = (float)$total_importe_adeudado + (float)$factura['importe_total_numeric'];
                                     $importe_adeudado_display = $factura['importe_total_formatted'];
-                                    $factura_label = 'Nota de Crédito: ' . $factura['talonario']['letra'] . ' ' . $factura['talonario']['nro_punto_vta'] . ' - ' . $factura['nro_factura'];
+                                    $factura_label = 'Nota de Crédito: ' . $factura['talonario']['letra'] . ' ' . $factura['talonario']['nro_punto_vta'] . ' - ' . $factura['nro_factura']
+                                        . (isset($factura['factura_original_label']) ? ' (cancela ' . $factura['factura_original_label'] . ')' : '');
+                                } elseif (isset($factura['is_nota_debito']) && $factura['is_nota_debito']) {
+                                    // Las notas de débito suman al saldo adeudado
+                                    $total_importe_adeudado = (float)$total_importe_adeudado + (float)$factura['importe_total_numeric'];
+                                    $importe_adeudado_display = $factura['importe_total_formatted'];
+                                    $factura_label = 'Nota de Débito: ' . $factura['talonario']['letra'] . ' ' . $factura['talonario']['nro_punto_vta'] . ' - ' . $factura['nro_factura']
+                                        . (isset($factura['factura_original_label']) ? ' (modifica ' . $factura['factura_original_label'] . ')' : '');
                                 } elseif (isset($factura['is_anulada']) && $factura['is_anulada']) {
                                     // Facturas anuladas: no cuentan para totales
                                     $factura_label = $factura['talonario']['letra'] . ' ' . $factura['talonario']['nro_punto_vta'] . ' - ' . $factura['nro_factura'] . ' (ANULADA)';
@@ -4088,7 +4787,7 @@ class BillController extends Controller
                                 // agrego la linea al xls
                                 $sheet->appendRow(array(
                                     $user['nro_cliente'],
-                                    $user['cliente']['nombre_apellido'],
+                                    $user['nombre_cliente'],
                                     $factura['periodo'],
                                     $factura_label,
                                     isset($factura['fecha_emision']) ? $factura['fecha_emision'] : '',
@@ -4132,7 +4831,7 @@ class BillController extends Controller
 
                 \Log::error('ERROR generando Excel: ' . $e->getMessage());
                 \Log::error('Stack trace: ' . $e->getTraceAsString());
-                return $e;
+                return null;
             }
         } else {
             \Log::warning('Response vacía o nula, no se genera Excel');
@@ -6297,7 +6996,8 @@ class BillController extends Controller
                                 $afipResponse = $this->afipService->notaCreditoB(
                                     $ptoVta,
                                     $factura->importe_total,
-                                    $factura->nro_factura
+                                    $factura->nro_factura,
+                                    $factura->cliente->dni ?: null
                                 );
                             }
 

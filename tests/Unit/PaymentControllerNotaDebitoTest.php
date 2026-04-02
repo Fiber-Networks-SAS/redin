@@ -13,7 +13,7 @@ use Carbon\Carbon;
 /**
  * Stub simple para PaymentServiceInterface
  */
-class PaymentServiceStub implements PaymentServiceInterface
+class PaymentServiceNotaDebitoStub implements PaymentServiceInterface
 {
     public function createPaymentPreference(array $data) { return []; }
     public function getPaymentStatus($paymentId) { return []; }
@@ -37,7 +37,7 @@ class PaymentControllerNotaDebitoTest extends TestCase
         parent::setUp();
 
         // Usar stub simple en lugar de mock
-        $paymentServiceStub = new PaymentServiceStub();
+        $paymentServiceStub = new PaymentServiceNotaDebitoStub();
         $this->controller = new PaymentController($paymentServiceStub);
     }
 

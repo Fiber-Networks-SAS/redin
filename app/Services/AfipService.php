@@ -434,7 +434,7 @@ class AfipService
      * @param int $nroFacturaAsociada Número de la factura original
      * @return array Respuesta de AFIP con CAE y datos del comprobante
      */
-    public function notaDebitoB($ptoVta, $importe, $nroFacturaAsociada)
+    public function notaDebitoB($ptoVta, $importe, $nroFacturaAsociada, $dni = null)
     {
         \Log::info('AFIP - Iniciando creación de Nota de Débito B', [
             'ptoVta' => $ptoVta,
@@ -446,14 +446,16 @@ class AfipService
         $importeTotal = round($importe, 2);
         $importeNeto = round($importe / 1.21, 2);
         $importeIVA = round($importeTotal - $importeNeto, 2);
+        $docTipoFinal = $dni ? 96 : 99; // 96 = DNI, 99 = Consumidor Final
+        $docNroFinal  = $dni ? \intval($dni) : 0;
 
         $data = [
             'CantReg'   => 1,
             'PtoVta'    => $ptoVta,
             'CbteTipo'  => 7, // Nota de Débito B
             'Concepto'  => 2, // Servicios
-            'DocTipo'   => 99, // Consumidor Final
-            'DocNro'    => 0,
+            'DocTipo'   => $docTipoFinal,
+            'DocNro'    => $docNroFinal,
             'CbteDesde' => $lastVoucher + 1,
             'CbteHasta' => $lastVoucher + 1,
             'CbteFch'   => intval(date('Ymd')),

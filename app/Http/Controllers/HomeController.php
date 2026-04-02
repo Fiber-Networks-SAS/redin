@@ -53,9 +53,30 @@ class HomeController extends Controller
             $servicio->tipo_nombre = $this->getServiceTypeName($servicio->tipo);
         }
 
-
         // Obtener configuración global de la home (HomeSetting)
         $homeSettings = \App\HomeSetting::all()->keyBy('key');
+
+        // Aplicar precios web override a servicios (si existen)
+        foreach ($servicios as $servicio) {
+            $keyAbono = 'web_price_abono_' . $servicio->id;
+            $keyInst  = 'web_price_inst_'  . $servicio->id;
+            if (isset($homeSettings[$keyAbono]) && $homeSettings[$keyAbono]->value !== '') {
+                $servicio->abono_mensual = (float) $homeSettings[$keyAbono]->value;
+            }
+            if (isset($homeSettings[$keyInst]) && $homeSettings[$keyInst]->value !== '') {
+                $servicio->costo_instalacion = (float) $homeSettings[$keyInst]->value;
+            }
+        }
+        foreach ($serviciosInternet as $servicio) {
+            $keyAbono = 'web_price_abono_' . $servicio->id;
+            $keyInst  = 'web_price_inst_'  . $servicio->id;
+            if (isset($homeSettings[$keyAbono]) && $homeSettings[$keyAbono]->value !== '') {
+                $servicio->abono_mensual = (float) $homeSettings[$keyAbono]->value;
+            }
+            if (isset($homeSettings[$keyInst]) && $homeSettings[$keyInst]->value !== '') {
+                $servicio->costo_instalacion = (float) $homeSettings[$keyInst]->value;
+            }
+        }
 
         // Obtener contenido dinámico del CMS (secciones)
         $homeContents = HomeContent::where('is_active', 1)->orderBy('sort_order')->get();

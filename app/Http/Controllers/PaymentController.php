@@ -247,9 +247,10 @@ class PaymentController extends Controller
                 $factura = $paymentPreference->factura;
                 if ($factura) {
                     $this->updateFacturaPaymentStatus($factura, $paymentPreference, $paymentStatus);
+                    Log::info("Pago procesado exitosamente para factura {$factura->id}, vencimiento {$paymentPreference->vencimiento_tipo}");
+                } else {
+                    Log::warning("Pago aprobado pero sin factura asociada para external_reference: {$externalReference}");
                 }
-
-                Log::info("Pago procesado exitosamente para factura {$factura->id}, vencimiento {$paymentPreference->vencimiento_tipo}");
             } else {
                 // Marcar como rechazada si no está aprobada
                 if ($paymentStatus['status'] === 'rejected') {
