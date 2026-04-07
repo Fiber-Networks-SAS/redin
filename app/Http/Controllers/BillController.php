@@ -514,58 +514,53 @@ class BillController extends Controller
     // bonificacion de factura POST
     public function getBillImprovePost(Request $request, $id)
     {
-
-
-
-
         //-- VALIDATOR START --//
         $rules = array(
             'importe_bonificacion' => ['required', 'numeric'],
         );
 
-
         $validator = Validator::make($request->all(), $rules);
-
 
         if ($validator->fails()) {
             return back()->withInput()->withErrors($validator);
         }
         //-- VALIDATOR END --//
 
-
-
-
         $factura = Factura::find($id);
-
 
         // obtengo el nro de punto de venta y el nro de factura
         $factura->talonario;
         $factura_nro_punto_vta = $this->zerofill($factura->talonario->nro_punto_vta, 4);
-        $factura_nro_factura = $this->zerofill($factura->nro_factura);
-
+        $factura_nro_factura   = $this->zerofill($factura->nro_factura);
 
         if ($factura) {
 
-
-            // obtengo la conf. de intereses 
+            // obtengo la conf. de intereses
             $interes = Interes::find(1);
-
 
             // obtengo la fecha actual
             $fecha_actual = Carbon::now();
 
-
-            $factura->fecha_emision = $fecha_actual; // actualizo la fecha de emision.
+            // Preparar los nuevos valores en memoria (todavía NO se persiste en BD).
+            // FIX BUG 2: la factura solo se guarda dentro de la transacción, después
+            // de que AFIP confirme la NC. Antes, se guardaba aquí y si AFIP fallaba
+            // la factura quedaba modificada en BD sin nota de crédito asociada.
+            $factura->fecha_emision        = $fecha_actual;
             $factura->importe_bonificacion += $this->floatvalue($request->importe_bonificacion);
-            $factura->importe_total = $this->floatvalue($factura->importe_subtotal - $factura->importe_bonificacion);
-            $factura->primer_vto_codigo = $this->getCodigoPago($factura->importe_total, $factura->primer_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
+            $factura->importe_total         = $this->floatvalue($factura->importe_subtotal - $factura->importe_bonificacion);
+            // FIX BUG 4: actualizar importe_bonificacion_iva en la factura.
+            // Antes solo se actualizaban importe_bonificacion e importe_total, dejando
+            // importe_bonificacion_iva desactualizado en la tabla facturas.
+            $factura->importe_bonificacion_iva = round(
+                $factura->importe_bonificacion - $factura->importe_bonificacion / 1.21,
+                2
+            );
+            $factura->primer_vto_codigo  = $this->getCodigoPago($factura->importe_total, $factura->primer_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
             $factura->segundo_vto_importe = $this->getImporteConTasaInteres($factura->importe_total, $interes->segundo_vto_tasa);
-            $factura->segundo_vto_codigo = $this->getCodigoPago($factura->segundo_vto_importe, $factura->segundo_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
-
+            $factura->segundo_vto_codigo  = $this->getCodigoPago($factura->segundo_vto_importe, $factura->segundo_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
 
             // ACTUALIZACION TERCER VENCIMIENTO ------------------
             // PEDIDO DE ORNE: NO GENERAR EL 3ER CODIGO DE BARRAS (en caso de volver atras descomentar las siguientes lineas)
-
 
             // $fecha_actual                = $factura->tercer_vto_fecha != '' ? $factura->tercer_vto_fecha : $fecha_actual; // verifico si tiene una fecha establecida
             // $response                    = $this->getImporteConTasaInteresTercerVto($factura->segundo_vto_importe, $factura->segundo_vto_fecha, $interes->tercer_vto_tasa, Carbon::parse($fecha_actual)->format('d/m/Y'));
@@ -574,220 +569,217 @@ class BillController extends Controller
             // $factura->tercer_vto_importe = $response['importe'];
             // $factura->tercer_vto_codigo  = $this->getCodigoPago($factura->tercer_vto_importe, $factura->tercer_vto_fecha, $factura->nro_cliente, $factura_nro_punto_vta, $factura_nro_factura);
 
-
-            $factura->tercer_vto_fecha = NULL;
-            $factura->tercer_vto_tasa = 0;
+            $factura->tercer_vto_fecha   = NULL;
+            $factura->tercer_vto_tasa    = 0;
             $factura->tercer_vto_importe = 0;
-            $factura->tercer_vto_codigo = '';
+            $factura->tercer_vto_codigo  = '';
 
-
-            if ($factura->save()) {
-
-
-                // Regenerar c�digos QR con el nuevo importe
-                // Solo si la factura tiene importe pendiente y no está pagada
-                if ($factura->importe_total > 0 && empty($factura->fecha_pago)) {
-                    $this->generatePaymentQRCodes($factura);
-                } else {
-                    Log::info('Factura NO requiere QR codes - Ya está pagada o importe es 0', [
-                        'factura_id' => $factura->id,
-                        'importe_total' => $factura->importe_total,
-                        'fecha_pago' => $factura->fecha_pago
-                    ]);
+            // FIX BUG 1 + BUG 2: el try/catch externo ahora reemplaza dd($e) por una
+            // respuesta de error al usuario. Antes, cualquier excepción terminaba en un
+            // dd() que volcaba el stack trace en pantalla y dejaba la factura ya guardada
+            // en BD sin nota de crédito.
+            try {
+                // FIX BUG 2: llamar a AFIP ANTES de persistir cualquier cambio en BD.
+                // Si AFIP falla, ninguna escritura en BD se realizó y la factura
+                // queda intacta.
+                if ($this->afipService === null) {
+                    Log::error('AfipService no está disponible para emitir nota de crédito.');
+                    throw new \Exception('El servicio de AFIP no está disponible. Verifique la configuración de certificados.');
                 }
 
+                $cbteTipo    = $factura->talonario->letra == 'A' ? 3 : 8;
+                $lastVoucher = $this->afipService->getLastVoucher($factura->talonario->nro_punto_vta, $cbteTipo);
 
-                // Emitir nota de cr�dito en AFIP
-                try {
-                    // Verificar que el servicio AFIP esté disponible
-                    if ($this->afipService === null) {
-                        Log::error('AfipService no está disponible para emitir nota de crédito.');
-                        throw new \Exception('Error: El servicio de AFIP no está disponible. Verifique la configuración de certificados.');
-                    }
-                    
-                    $cbteTipo = $factura->talonario->letra == 'A' ? 3 : 8;
-                    $lastVoucher = $this->afipService->getLastVoucher($factura->talonario->nro_punto_vta, $cbteTipo);
+                if ($factura->talonario->letra == 'A') {
+                    $afipResponse = $this->afipService->notaCreditoA(
+                        $factura->talonario->nro_punto_vta,
+                        $factura->cliente->dni,
+                        $this->floatvalue($request->importe_bonificacion),
+                        $factura->nro_factura
+                    );
+                } else {
+                    $afipResponse = $this->afipService->notaCreditoB(
+                        $factura->talonario->nro_punto_vta,
+                        $this->floatvalue($request->importe_bonificacion),
+                        $factura->nro_factura,
+                        $factura->cliente->dni ?: null
+                    );
+                }
 
+                Log::info('Respuesta AFIP nota de crédito', $afipResponse);
 
-                    if ($factura->talonario->letra == 'A') {
-                        $afipResponse = $this->afipService->notaCreditoA(
-                            $factura->talonario->nro_punto_vta,
-                            $factura->cliente->dni,
-                            $this->floatvalue($request->importe_bonificacion),
-                            $factura->nro_factura
-                        );
-                    } else {
-                        $afipResponse = $this->afipService->notaCreditoB(
-                            $factura->talonario->nro_punto_vta,
-                            $this->floatvalue($request->importe_bonificacion),
-                            $factura->nro_factura,
-                            $factura->cliente->dni ?: null
-                        );
-                    }
+                // Construir el objeto NotaCredito en memoria (sin guardar aún).
+                // El save ocurre dentro de la transacción DB más abajo.
+                $nota = null;
 
+                if (isset($afipResponse['CbteDesde']) && !empty($afipResponse['CbteDesde'])) {
+                    Log::info('CbteDesde encontrado, construyendo nota de crédito', ['CbteDesde' => $afipResponse['CbteDesde']]);
+                    $nota = $this->buildNotaCreditoBonificacion($factura, $afipResponse, $afipResponse['CbteDesde'], $request);
 
-                    Log::info('Respuesta AFIP nota de cr�dito', $afipResponse);
+                } elseif (isset($afipResponse['CAE']) && !empty($afipResponse['CAE'])) {
+                    // AFIP devolvió CAE pero no CbteDesde — intentar obtener el número asignado
+                    Log::warning('AFIP devolvió CAE pero no CbteDesde - intentando obtener número de voucher asignado');
+                    Log::warning('Respuesta AFIP completa:', $afipResponse);
 
+                    try {
+                        $newLastVoucher = $this->afipService->getLastVoucher($factura->talonario->nro_punto_vta, $cbteTipo);
+                        Log::info('AFIP - último voucher después de creación', ['new_last_voucher' => $newLastVoucher]);
 
-                    // Verificar si la respuesta indica �xito
-                    if (isset($afipResponse['CbteDesde']) && !empty($afipResponse['CbteDesde'])) {
-                        Log::info('CbteDesde encontrado, creando nota de cr�dito', ['CbteDesde' => $afipResponse['CbteDesde']]);
-                        $nota = new NotaCredito();
-                        $nota->factura_id = $factura->id;
-                        $nota->talonario_id = $factura->talonario_id;
-                        $nota->nro_nota_credito = $afipResponse['CbteDesde'];
-                        $nota->importe_bonificacion = round($this->floatvalue($request->importe_bonificacion) / 1.21, 2);
-                        $nota->importe_iva = round($this->floatvalue($request->importe_bonificacion) - $this->floatvalue($request->importe_bonificacion) / 1.21, 2);
-                        $nota->importe_total = round($this->floatvalue($request->importe_bonificacion), 2);
-                        $nota->cae = isset($afipResponse['CAE']) ? $afipResponse['CAE'] : null;
-                        try {
-                            if (isset($afipResponse['CAEFchVto'])) {
-                                $caeVto = $afipResponse['CAEFchVto'];
-                                // AFIP puede devolver en formato Ymd (20260121) o Y-m-d (2026-01-21)
-                                if (strlen($caeVto) == 8 && is_numeric($caeVto)) {
-                                    $nota->cae_vto = Carbon::createFromFormat('Ymd', $caeVto);
-                                } else {
-                                    $nota->cae_vto = Carbon::parse($caeVto);
-                                }
-                            } else {
-                                $nota->cae_vto = null;
-                            }
-                        } catch (\Exception $e) {
-                            Log::error('Error parsing CAEFchVto: ' . $e->getMessage(), ['cae_vto' => $afipResponse['CAEFchVto'] ?? 'N/A']);
-                            $nota->cae_vto = null;
+                        if ($newLastVoucher > $lastVoucher) {
+                            Log::info('AFIP - Voucher asignado detectado, usando número: ' . $newLastVoucher);
+                            $afipResponse['CbteDesde'] = $newLastVoucher;
+                            $nota = $this->buildNotaCreditoBonificacion($factura, $afipResponse, $newLastVoucher, $request);
+                        } else {
+                            Log::warning('AFIP - No se detectó nuevo voucher asignado, no se crea nota de crédito');
                         }
-                        $nota->fecha_emision = Carbon::now();
-                        $nota->motivo = 'Bonificacion';
-                        $nota->nro_cliente = $factura->cliente->nro_cliente;
-                        $nota->periodo = $factura->periodo;
-
-
-                        Log::info('Datos de nota de cr�dito a guardar', $nota->toArray());
-
-
-                        try {
-                            $saved = $nota->save();
-                            if ($saved) {
-                                Log::info('Nota de cr�dito creada exitosamente', ['nota_id' => $nota->id]);
-                            } else {
-                                Log::error('Error al guardar nota de cr�dito: save() retorn� false');
-                                Log::error('Atributos de la nota:', $nota->getAttributes());
-                            }
-                        } catch (\Exception $e) {
-                            Log::error('Excepci�n al guardar nota de cr�dito: ' . $e->getMessage());
-                            Log::error('Stack trace: ' . $e->getTraceAsString());
-                        }
-                    } elseif (isset($afipResponse['CAE']) && !empty($afipResponse['CAE'])) {
-                        // AFIP devolvi� CAE pero no CbteDesde - intentar obtener el n�mero asignado
-                        Log::warning('AFIP devolvi� CAE pero no CbteDesde - intentando obtener n�mero de voucher asignado');
-                        Log::warning('Respuesta AFIP completa:', $afipResponse);
-
-
-                        // Intentar obtener el �ltimo voucher despu�s de la creaci�n para ver si fue asignado
-                        try {
-                            $newLastVoucher = $this->afipService->getLastVoucher($factura->talonario->nro_punto_vta, $cbteTipo);
-                            Log::info('AFIP - �ltimo voucher despu�s de creaci�n', ['new_last_voucher' => $newLastVoucher]);
-
-
-                            if ($newLastVoucher > $lastVoucher) {
-                                // El voucher fue asignado, usar el nuevo n�mero
-                                Log::info('AFIP - Voucher asignado detectado, usando n�mero: ' . $newLastVoucher);
-                                $afipResponse['CbteDesde'] = $newLastVoucher;
-                                $nota = new NotaCredito();
-                                $nota->factura_id = $factura->id;
-                                $nota->talonario_id = $factura->talonario_id;
-                                $nota->nro_nota_credito = $newLastVoucher;
-                                $nota->importe_bonificacion = round($this->floatvalue($request->importe_bonificacion) / 1.21, 2);
-                                $nota->importe_iva = round($this->floatvalue($request->importe_bonificacion) - $this->floatvalue($request->importe_bonificacion) / 1.21, 2);
-                                $nota->importe_total = round($this->floatvalue($request->importe_bonificacion), 2);
-                                $nota->cae = isset($afipResponse['CAE']) ? $afipResponse['CAE'] : null;
-                                try {
-                                    if (isset($afipResponse['CAEFchVto'])) {
-                                        $caeVto = $afipResponse['CAEFchVto'];
-                                        // AFIP puede devolver en formato Ymd (20260121) o Y-m-d (2026-01-21)
-                                        if (strlen($caeVto) == 8 && is_numeric($caeVto)) {
-                                            $nota->cae_vto = Carbon::createFromFormat('Ymd', $caeVto);
-                                        } else {
-                                            $nota->cae_vto = Carbon::parse($caeVto);
-                                        }
-                                    } else {
-                                        $nota->cae_vto = null;
-                                    }
-                                } catch (\Exception $e) {
-                                    Log::error('Error parsing CAEFchVto: ' . $e->getMessage(), ['cae_vto' => $afipResponse['CAEFchVto'] ?? 'N/A']);
-                                    $nota->cae_vto = null;
-                                }
-                                $nota->fecha_emision = Carbon::now();
-                                $nota->motivo = 'Bonificacion';
-                                $nota->nro_cliente = $factura->cliente->nro_cliente;
-                                $nota->periodo = $factura->periodo;
-
-
-                                if ($nota->save()) {
-                                    Log::info('Nota de cr�dito creada exitosamente con workaround', ['nota_id' => $nota->id, 'nro_nota_credito' => $newLastVoucher]);
-                                } else {
-                                    Log::error('Error al guardar nota de cr�dito con workaround');
-                                    $nota = null;
-                                }
-                            } else {
-                                Log::warning('AFIP - No se detect� nuevo voucher asignado, no se crea nota de cr�dito');
-                                $nota = null;
-                            }
-                        } catch (\Exception $e) {
-                            Log::error('Error al intentar obtener �ltimo voucher despu�s de creaci�n: ' . $e->getMessage());
-                            $nota = null;
-                        }
-                    } else {
-                        $nota = null;
-                        Log::error('AFIP no devolvi� CbteDesde ni CAE v�lido, no se crea la nota de cr�dito');
-                        Log::error('Respuesta completa de AFIP:', $afipResponse);
+                    } catch (\Exception $e) {
+                        Log::error('Error al intentar obtener último voucher después de creación: ' . $e->getMessage());
                     }
 
+                } else {
+                    Log::error('AFIP no devolvió CbteDesde ni CAE válido, no se crea la nota de crédito');
+                    Log::error('Respuesta completa de AFIP:', $afipResponse);
+                }
 
-                    // Crear o actualizar bonificaci�n puntual
+                // FIX BUG 2: persistir factura + NotaCredito + BonificacionPuntual en una
+                // sola transacción atómica. Si cualquier escritura falla, todas se revierten
+                // y la BD queda coherente. AFIP ya confirmó la NC antes de llegar aquí.
+                $importeBonificacion = $this->floatvalue($request->importe_bonificacion);
+                DB::transaction(function () use ($factura, $nota, $afipResponse, $importeBonificacion) {
+
+                    // 1. Guardar factura con el descuento aplicado
+                    if (!$factura->save()) {
+                        throw new \Exception('Error al guardar la factura con la bonificación aplicada.');
+                    }
+                    Log::info('Factura guardada con bonificación', ['factura_id' => $factura->id]);
+
+                    // 2. Guardar NotaCredito si AFIP devolvió un comprobante válido
+                    if ($nota !== null) {
+                        if (!$nota->save()) {
+                            Log::error('Atributos de la nota:', $nota->getAttributes());
+                            throw new \Exception('Error al guardar la nota de crédito en la base de datos.');
+                        }
+                        Log::info('Nota de crédito guardada exitosamente', ['nota_id' => $nota->id]);
+                    }
+
+                    // 3. Crear o actualizar BonificacionPuntual
+                    // FIX BUG 3: usar ($nota && $nota->id) en lugar de ($nota).
+                    // Antes, si $nota->save() fallaba, $nota era un objeto no-null con id=null,
+                    // y la condición ternaria lo evaluaba como truthy, sobreescribiendo un
+                    // nota_credito_id existente y válido con null.
+                    $notaId = ($nota && $nota->id) ? $nota->id : null;
+
                     $existingBonificacion = BonificacionPuntual::where('factura_id', $factura->id)->first();
                     if ($existingBonificacion) {
-                        $existingBonificacion->importe += $this->floatvalue($request->importe_bonificacion);
-                        $existingBonificacion->afip_response = $afipResponse; // actualizar respuesta AFIP
-                        $existingBonificacion->nota_credito_id = $nota ? $nota->id : $existingBonificacion->nota_credito_id;
+                        $existingBonificacion->importe        += $importeBonificacion;
+                        $existingBonificacion->afip_response   = $afipResponse;
+                        $existingBonificacion->nota_credito_id = $notaId !== null
+                            ? $notaId
+                            : $existingBonificacion->nota_credito_id;
                         if ($existingBonificacion->save()) {
-                            Log::info('Bonificaci�n puntual actualizada exitosamente', ['bonificacion_id' => $existingBonificacion->id]);
+                            Log::info('Bonificación puntual actualizada exitosamente', ['bonificacion_id' => $existingBonificacion->id]);
                         } else {
-                            Log::error('Error al actualizar bonificaci�n puntual: save() retorn� false');
+                            throw new \Exception('Error al actualizar la bonificación puntual.');
                         }
                     } else {
-                        $bonificacion = new BonificacionPuntual();
-                        $bonificacion->factura_id = $factura->id;
-                        $bonificacion->importe = $this->floatvalue($request->importe_bonificacion);
-                        $bonificacion->descripcion = 'Bonificacion aplicada por la empresa';
-                        $bonificacion->afip_response = $afipResponse;
-                        $bonificacion->nota_credito_id = $nota ? $nota->id : null;
+                        $bonificacion                  = new BonificacionPuntual();
+                        $bonificacion->factura_id      = $factura->id;
+                        $bonificacion->importe         = $importeBonificacion;
+                        $bonificacion->descripcion     = 'Bonificacion aplicada por la empresa';
+                        $bonificacion->afip_response   = $afipResponse;
+                        $bonificacion->nota_credito_id = $notaId;
                         if ($bonificacion->save()) {
-                            Log::info('Bonificaci�n puntual creada exitosamente', ['bonificacion_id' => $bonificacion->id]);
+                            Log::info('Bonificación puntual creada exitosamente', ['bonificacion_id' => $bonificacion->id]);
                         } else {
-                            Log::error('Error al guardar bonificaci�n puntual: save() retorn� false');
+                            throw new \Exception('Error al guardar la bonificación puntual.');
                         }
                     }
-                } catch (\Exception $e) {
-                    Log::error('Error al emitir nota de cr�dito: ' . $e->getMessage());
-                    dd($e);
-                }
+                });
 
-
-                // actualizo el PDF del periodo e individual
-                $this->setFacturasPeriodoPDF($factura->periodo, $factura->id);
-                $filename = $this->getFacturaPDFPath($request, $factura);
-
-
-
-
-                return redirect($request->previousUrl)->with(['status' => 'success', 'message' => 'Se ha bonificado la factura ' . $factura->talonario->letra . ' ' . $factura->talonario->nro_punto_vta . ' - ' . $factura->nro_factura . '.', 'icon' => 'fa-smile-o', 'filename' => $filename, 'factura_id' => $factura->id]);
-            } else {
-
-
-                return back()->withInput()->with(['status' => 'danger', 'message' => 'Ha ocurrido un error.', 'icon' => 'fa-frown-o']);
+            } catch (\Exception $e) {
+                // FIX BUG 1: reemplazar dd($e) por una respuesta de error al usuario.
+                // dd() volcaba el stack trace en pantalla (exposición de datos internos)
+                // y dejaba ejecución cortada sin respuesta HTTP válida.
+                Log::error('Error al procesar bonificación: ' . $e->getMessage());
+                Log::error('Stack trace: ' . $e->getTraceAsString());
+                return back()->withInput()->with([
+                    'status'  => 'danger',
+                    'message' => 'Ha ocurrido un error al procesar la bonificación. Por favor intente nuevamente.',
+                    'icon'    => 'fa-frown-o',
+                ]);
             }
+
+            // Regenerar códigos QR con el nuevo importe (fuera de la transacción DB)
+            // Solo si la factura tiene importe pendiente y no está pagada
+            if ($factura->importe_total > 0 && empty($factura->fecha_pago)) {
+                $this->generatePaymentQRCodes($factura);
+            } else {
+                Log::info('Factura NO requiere QR codes - Ya está pagada o importe es 0', [
+                    'factura_id'    => $factura->id,
+                    'importe_total' => $factura->importe_total,
+                    'fecha_pago'    => $factura->fecha_pago
+                ]);
+            }
+
+            // actualizo el PDF del periodo e individual
+            $this->setFacturasPeriodoPDF($factura->periodo, $factura->id);
+            $filename = $this->getFacturaPDFPath($request, $factura);
+
+            return redirect($request->previousUrl)->with(['status' => 'success', 'message' => 'Se ha bonificado la factura ' . $factura->talonario->letra . ' ' . $factura->talonario->nro_punto_vta . ' - ' . $factura->nro_factura . '.', 'icon' => 'fa-smile-o', 'filename' => $filename, 'factura_id' => $factura->id]);
         }
+    }
+
+    /**
+     * Construye un objeto NotaCredito en memoria a partir de la respuesta de AFIP.
+     * No persiste en BD; el save ocurre dentro de la transacción en getBillImprovePost.
+     *
+     * @param  Factura  $factura
+     * @param  array    $afipResponse
+     * @param  int      $nroNotaCredito  Número de comprobante asignado por AFIP
+     * @param  Request  $request
+     * @return NotaCredito
+     */
+    private function buildNotaCreditoBonificacion($factura, $afipResponse, $nroNotaCredito, $request)
+    {
+        $importe = $this->floatvalue($request->importe_bonificacion);
+
+        $nota                    = new NotaCredito();
+        $nota->factura_id        = $factura->id;
+        $nota->talonario_id      = $factura->talonario_id;
+        $nota->nro_nota_credito  = $nroNotaCredito;
+        $nota->importe_bonificacion = round($importe / 1.21, 2);
+        $nota->importe_iva          = round($importe - $importe / 1.21, 2);
+        $nota->importe_total        = round($importe, 2);
+        $nota->cae               = isset($afipResponse['CAE']) ? $afipResponse['CAE'] : null;
+        $nota->fecha_emision     = Carbon::now();
+        $nota->motivo            = 'Bonificacion';
+        // FIX BUG RAÍZ: notas_credito.nro_cliente es INTEGER (PK de users).
+        // El campo users.nro_cliente contiene strings tipo "RD00-0054", que MySQL
+        // rechazaba al insertar en la columna INTEGER, causando que NINGUNA nota
+        // de crédito se registrara en BD (error silenciado por el inner try-catch).
+        $nota->nro_cliente       = $factura->cliente->id;
+        $nota->periodo           = $factura->periodo;
+
+        try {
+            if (isset($afipResponse['CAEFchVto'])) {
+                $caeVto = $afipResponse['CAEFchVto'];
+                // AFIP puede devolver en formato Ymd (20260121) o Y-m-d (2026-01-21)
+                if (strlen($caeVto) == 8 && is_numeric($caeVto)) {
+                    $nota->cae_vto = Carbon::createFromFormat('Ymd', $caeVto);
+                } else {
+                    $nota->cae_vto = Carbon::parse($caeVto);
+                }
+            } else {
+                $nota->cae_vto = null;
+            }
+        } catch (\Exception $e) {
+            Log::error('Error parsing CAEFchVto: ' . $e->getMessage(), ['cae_vto' => $afipResponse['CAEFchVto'] ?? 'N/A']);
+            $nota->cae_vto = null;
+        }
+
+        Log::info('Nota de crédito construida en memoria', $nota->toArray());
+
+        return $nota;
     }
 
 

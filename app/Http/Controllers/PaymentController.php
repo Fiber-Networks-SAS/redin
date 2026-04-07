@@ -106,18 +106,46 @@ class PaymentController extends Controller
                 return response()->json(['error' => 'Unauthorized'], 401);
             }
 
-            // Validar estructura básica del webhook
+            // Detectar formato antiguo de MercadoPago: usa 'topic'/'id' en lugar de 'type'/'data'.
+            // Ejemplo: {"topic":"payment","id":"141000956330","resource":"141000956330"}
+            // Este formato llegaba al webhook y era descartado como "estructura inválida",
+            // causando que pagos completados por el usuario no se registraran en el sistema.
+            if (!isset($webhookData['type']) && isset($webhookData['topic'])) {
+                if ($webhookData['topic'] === 'payment' && !empty($webhookData['id'])) {
+                    Log::info('Webhook formato antiguo (topic/id) detectado, procesando pago:', [
+                        'payment_id' => $webhookData['id'],
+                    ]);
+                    $this->processPaymentApproval((string) $webhookData['id']);
+                    Log::info('Pago procesado desde webhook formato antiguo:', ['payment_id' => $webhookData['id']]);
+                } else {
+                    // merchant_order u otro topic sin ID de pago — no hay nada que procesar
+                    Log::info('Webhook formato antiguo ignorado (topic sin pago):', [
+                        'topic' => $webhookData['topic'] ?? 'desconocido',
+                    ]);
+                }
+                return response()->json(['status' => 'ok'], 200);
+            }
+
+            // Validar estructura del formato nuevo
             if (!isset($webhookData['type']) || !isset($webhookData['data'])) {
                 Log::warning('Webhook con estructura inválida:', $webhookData);
                 return response()->json(['error' => 'Invalid webhook structure'], 400);
             }
 
-            // Procesar el webhook
+            // Tipos internos de MercadoPago (ej: topic_merchant_order_wh) que llegan en formato
+            // nuevo pero no contienen pagos procesables. Se acepta con 200 para que MP no reintente.
+            $processableTypes = ['payment', 'plan', 'subscription', 'invoice'];
+            if (!in_array($webhookData['type'], $processableTypes)) {
+                Log::info('Webhook tipo no procesable, ignorado:', ['type' => $webhookData['type']]);
+                return response()->json(['status' => 'ok'], 200);
+            }
+
+            // Procesar el webhook de pago en formato nuevo
             $result = $this->paymentService->processWebhook($webhookData);
 
             if ($result['success'] && $result['type'] === 'payment') {
                 $paymentInfo = $result['payment_info'];
-                
+
                 if ($paymentInfo['success']) {
                     $this->processPaymentApproval($paymentInfo);
                     Log::info('Pago procesado exitosamente desde webhook:', [
@@ -139,35 +167,17 @@ class PaymentController extends Controller
     }
 
     /**
-     * Validar que el webhook provenga de MercadoPago
+     * Validar que el webhook provenga de MercadoPago.
+     * Solo verifica el User-Agent; el filtrado por tipo se hace en mercadoPagoWebhook()
+     * para poder responder 200 a tipos no procesables sin rechazarlos con 401.
      */
     protected function validateMercadoPagoWebhook(Request $request)
     {
         $userAgent = $request->header('User-Agent');
 
-        // MercadoPago usa un User-Agent específico para sus webhooks
         if (empty($userAgent) || strpos($userAgent, 'MercadoPago') === false) {
             return false;
         }
-
-        // Si tiene 'type', validar que sea un tipo permitido
-        $data = $request->all();
-        if (isset($data['type'])) {
-            $allowedTypes = ['payment', 'plan', 'subscription', 'invoice'];
-            if (!in_array($data['type'], $allowedTypes)) {
-                return false;
-            }
-        }
-
-        // Validar rangos de IP de MercadoPago (opcional pero recomendado)
-        $clientIp = $request->ip();
-        // if (!$this->isValidMercadoPagoIP($clientIp)) {
-        //     Log::warning('Webhook desde IP no autorizada', ['ip' => $clientIp]);
-        //     // En desarrollo permitir localhost, en producción comentar esta línea
-        //     if (!in_array($clientIp, ['127.0.0.1', '::1']) && config('app.env') !== 'local') {
-        //         return false;
-        //     }
-        // }
 
         return true;
     }    /**
